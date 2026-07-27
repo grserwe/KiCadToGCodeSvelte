@@ -21,7 +21,10 @@ export default defineConfig(
 		rules: {
 			// typescript-eslint recommend disabling no-undef on TypeScript projects.
 			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
-			'no-undef': 'off'
+			'no-undef': 'off',
+			// Single-page app with plain string hrefs; resolve() adds verbosity
+			// without benefit here.
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	},
 	{
