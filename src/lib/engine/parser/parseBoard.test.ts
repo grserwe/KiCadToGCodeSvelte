@@ -130,9 +130,35 @@ describe('parseBoard — error handling', () => {
 	it('rejects non-KiCad files', () => {
 		expect(() => parseBoard('(gerber stuff)')).toThrow(BoardParseError);
 		expect(() => parseBoard('hello world')).toThrow(BoardParseError);
+		expect(() => parseBoard('')).toThrow(BoardParseError);
 	});
 
 	it('rejects files with no version record', () => {
 		expect(() => parseBoard('(kicad_pcb (net 0 ""))')).toThrow(BoardParseError);
+	});
+
+	it('rejects a truncated file with a line reference', () => {
+		const truncated = fixture('TopAndBottomLayer.kicad_pcb').slice(0, 5000);
+		expect(() => parseBoard(truncated)).toThrow(/not a readable kicad board file/i);
+	});
+
+	it('rejects a board with nothing to machine', () => {
+		expect(() => parseBoard('(kicad_pcb (version 20241229) (net 0 ""))')).toThrow(
+			/nothing to machine/i
+		);
+	});
+
+	it('collects warnings instead of crashing on partial data', () => {
+		const flaky = `(kicad_pcb (version 20241229)
+			(gr_rect (start 0 0) (end 10 10) (stroke (width 0.1) (type solid)) (layer "Edge.Cuts"))
+			(segment (start 1 1) (end 5 5) (layer "In1.Cu") (net 0))
+			(segment (start 1 1) (end 5 5) (width 0.2) (layer "F.Cu") (net 0))
+			(footprint "Test:NoPos" (layer "F.Cu")
+				(pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu")))
+			)`;
+		const { board, warnings } = parseBoard(flaky);
+		expect(board.tracks).toHaveLength(1);
+		expect(warnings.some((w) => w.code === 'inner-layer-track')).toBe(true);
+		expect(warnings.some((w) => w.code === 'pad-skipped')).toBe(true);
 	});
 });

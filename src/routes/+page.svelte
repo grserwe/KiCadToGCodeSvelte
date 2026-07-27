@@ -169,6 +169,41 @@
 				<p class="mt-6 text-sm text-slate-500">
 					Everything runs in your browser — your design never leaves your computer.
 				</p>
+
+				<div class="mx-auto mt-10 max-w-xl space-y-2 text-left">
+					<details class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+						<summary class="cursor-pointer text-sm font-semibold text-slate-800">
+							What is isolation routing?
+						</summary>
+						<p class="mt-2 text-sm text-slate-600">
+							Instead of etching away unwanted copper with chemicals, a CNC machine engraves a thin
+							groove around every trace and pad, electrically isolating them from the rest of the
+							copper. This tool generates those engraving paths from your KiCad design, offset by
+							your tool's cutting width so traces keep their designed size.
+						</p>
+					</details>
+					<details class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+						<summary class="cursor-pointer text-sm font-semibold text-slate-800">
+							What do I need?
+						</summary>
+						<p class="mt-2 text-sm text-slate-600">
+							A CNC router or engraver that accepts standard GCode (GRBL and similar), a copper-clad
+							board, a fine engraving bit or V-bit, and drill bits matching your design's hole
+							sizes. For double-sided boards, two alignment pins let you flip the board accurately
+							using the generated registration holes.
+						</p>
+					</details>
+					<details class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+						<summary class="cursor-pointer text-sm font-semibold text-slate-800">
+							What isn't supported yet?
+						</summary>
+						<p class="mt-2 text-sm text-slate-600">
+							Copper zones (filled pours), curved traces, inner layers of 4+ layer boards, and board
+							outline cut-out GCode. You'll get a clear warning whenever your design uses something
+							the generator has to skip or approximate.
+						</p>
+					</details>
+				</div>
 			</section>
 		{:else}
 			<div class="mb-6">
@@ -254,7 +289,19 @@
 		{/if}
 	</main>
 
-	<footer class="mx-auto max-w-6xl px-4 py-8 text-center text-xs text-slate-400">
-		KiCadToGCode — free PCB isolation engraving, in your browser.
+	<footer
+		class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-4 py-8 text-xs text-slate-400"
+	>
+		<span>KiCadToGCode — free PCB isolation engraving, in your browser.</span>
+		<a
+			href="https://github.com/grserwe/KiCadToGCodeSvelte"
+			target="_blank"
+			rel="noopener"
+			class="underline hover:text-slate-600">Source on GitHub</a
+		>
+		<a
+			href="mailto:KiCadToGCode@outlook.com?subject=KiCadToGCode%20feedback"
+			class="underline hover:text-slate-600">Send feedback</a
+		>
 	</footer>
 </div>
