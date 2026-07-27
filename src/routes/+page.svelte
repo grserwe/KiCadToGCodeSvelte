@@ -1,11 +1,19 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import FileDrop from '$lib/components/FileDrop.svelte';
 	import Stepper from '$lib/components/Stepper.svelte';
 	import BoardPreview from '$lib/components/BoardPreview.svelte';
 	import DownloadPanel from '$lib/components/DownloadPanel.svelte';
+	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import { defaultSettings } from '$lib/engine/gcode/settings';
 	import type { LayerId } from '$lib/engine/model/types';
+	import {
+		boardNameFromPath,
+		extractPcbFromZip,
+		type PcbCandidate
+	} from '$lib/engine/zip/extractPcb';
 	import { buildScene } from '$lib/preview/scene';
+	import { loadSettings, saveSettings, clearSettings } from '$lib/settings/storage';
 	import { convertBoard, type ConversionResult } from '$lib/worker/engineClient';
 
 	let boardSource = $state<{ name: string; contents: string } | null>(null);
@@ -14,7 +22,31 @@
 	let error = $state('');
 	let side = $state<LayerId>('top');
 	let viewMode = $state<'designed' | 'machined'>('designed');
-	let settings = $state(defaultSettings());
+	let settings = $state(browser ? loadSettings() : defaultSettings());
+	let zipCandidates = $state<PcbCandidate[] | null>(null);
+
+	// Persist settings whenever they change, and regenerate the current board.
+	let settingsInitialized = false;
+	let regenerateTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const snapshot = $state.snapshot(settings);
+		if (!settingsInitialized) {
+			settingsInitialized = true;
+			return;
+		}
+		saveSettings(snapshot);
+		if (boardSource) {
+			clearTimeout(regenerateTimer);
+			regenerateTimer = setTimeout(() => {
+				if (boardSource) convert(boardSource.name, boardSource.contents);
+			}, 400);
+		}
+	});
+
+	function resetSettings() {
+		clearSettings();
+		settings = defaultSettings();
+	}
 
 	const scene = $derived(result ? buildScene(result.board, side, settings) : null);
 	const showMirrored = $derived(
@@ -22,11 +54,26 @@
 	);
 
 	async function loadFile(file: File) {
+		zipCandidates = null;
 		if (file.name.toLowerCase().endsWith('.zip')) {
-			error = 'Zipped projects are coming soon — please drop the .kicad_pcb file itself for now.';
+			try {
+				const candidates = extractPcbFromZip(new Uint8Array(await file.arrayBuffer()));
+				if (candidates.length === 1) {
+					await convert(boardNameFromPath(candidates[0].path), candidates[0].contents);
+				} else {
+					zipCandidates = candidates;
+				}
+			} catch (zipError) {
+				error = (zipError as Error).message;
+			}
 			return;
 		}
 		await convert(file.name.replace(/\.kicad_pcb$/i, ''), await file.text());
+	}
+
+	async function chooseCandidate(candidate: PcbCandidate) {
+		zipCandidates = null;
+		await convert(boardNameFromPath(candidate.path), candidate.contents);
 	}
 
 	async function loadSample() {
@@ -53,6 +100,7 @@
 		result = null;
 		error = '';
 		side = 'top';
+		zipCandidates = null;
 	}
 </script>
 
@@ -93,6 +141,28 @@
 				<div class="mt-8">
 					<FileDrop onfile={loadFile} onsample={loadSample} />
 				</div>
+				{#if zipCandidates}
+					<div
+						class="mx-auto mt-4 max-w-md rounded-xl border border-slate-200 bg-white p-4 text-left"
+					>
+						<p class="mb-2 text-sm font-semibold text-slate-800">
+							This project contains several boards — pick one:
+						</p>
+						<ul class="space-y-1">
+							{#each zipCandidates as candidate (candidate.path)}
+								<li>
+									<button
+										type="button"
+										class="w-full truncate rounded-lg px-3 py-1.5 text-left font-mono text-sm text-amber-700 hover:bg-amber-50"
+										onclick={() => chooseCandidate(candidate)}
+									>
+										{candidate.path}
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 				{#if error}
 					<p class="mt-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>
 				{/if}
@@ -166,6 +236,7 @@
 
 					<aside class="space-y-6">
 						<DownloadPanel files={result.files} boardName={boardSource.name} />
+						<SettingsPanel bind:settings onreset={resetSettings} />
 						<section
 							class="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"
 						>
