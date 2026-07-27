@@ -1,0 +1,21 @@
+# fly.toml for KiCadToGCode. See https://fly.io/docs/reference/configuration/
+#
+# Secrets (set with `fly secrets set KEY=value`):
+#   ORIGIN (set at domain cutover, e.g. https://kicadtogcode.com)
+
+app = 'kicadtogcode'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
