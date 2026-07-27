@@ -136,6 +136,25 @@
 				0.1
 			)}
 		{/if}
+		{@render numberField(
+			'Minimum trace width',
+			'mm',
+			() => settings.minimumTrackWidthMm,
+			(v) => (settings.minimumTrackWidthMm = v),
+			0.05
+		)}
+		{@render numberField(
+			'Minimum pad/via size',
+			'mm',
+			() => settings.minimumViaSizeMm,
+			(v) => (settings.minimumViaSizeMm = v),
+			0.1
+		)}
+		<p class="py-1 text-xs text-slate-400">
+			Thin traces and small pads are widened to these minimums so the copper doesn't peel while
+			machining — but only as far as neighboring copper on other nets allows, so widening never
+			causes a short.
+		</p>
 	{/snippet}
 	{@render group('tool', 'Tool', toolBody)}
 
@@ -173,13 +192,6 @@
 			(v) => (settings.isolationSpindleRPM = Math.round(v)),
 			500
 		)}
-		{@render numberField(
-			'Minimum track width',
-			'mm',
-			() => settings.minimumTrackWidthMm,
-			(v) => (settings.minimumTrackWidthMm = v),
-			0.05
-		)}
 	{/snippet}
 	{@render group('isolation', 'Isolation engraving', isolationBody)}
 
@@ -216,13 +228,6 @@
 			() => settings.drillingSpindleRPM,
 			(v) => (settings.drillingSpindleRPM = Math.round(v)),
 			500
-		)}
-		{@render numberField(
-			'Minimum pad/via size',
-			'mm',
-			() => settings.minimumViaSizeMm,
-			(v) => (settings.minimumViaSizeMm = v),
-			0.1
 		)}
 	{/snippet}
 	{@render group('drilling', 'Drilling', drillingBody)}

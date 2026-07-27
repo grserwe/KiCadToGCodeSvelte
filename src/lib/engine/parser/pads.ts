@@ -17,6 +17,7 @@ export interface RawPad {
 	isGround: boolean;
 	plated: boolean;
 	source: 'footprint' | 'via';
+	net: number;
 	footprint?: string;
 	padName?: string;
 }
@@ -119,6 +120,7 @@ function parseFootprintPad(
 		isGround: dialect.isPadGround(padRecord),
 		plated: padType !== 'np_thru_hole',
 		source: 'footprint',
+		net: numberAttr(findChild(padRecord, 'net'), 0) ?? 0,
 		footprint: footprintName,
 		padName
 	};
@@ -340,7 +342,8 @@ function extractVias(root: SExpr, warnings: EngineWarning[]): RawPad[] {
 			layers: 'through',
 			isGround: false,
 			plated: true,
-			source: 'via'
+			source: 'via',
+			net: numberAttr(findChild(via, 'net'), 0) ?? 0
 		});
 	}
 

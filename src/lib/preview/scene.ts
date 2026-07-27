@@ -39,6 +39,8 @@ export interface BoardScene {
 
 /** Build the renderable scene for one side directly from the geometry model. */
 export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSettings): BoardScene {
+	// The board arrives with minimum widths already applied (clearance-capped
+	// by the widening pass), so widths and sizes are used as-is.
 	const tracks: SceneTrack[] = board.tracks
 		.filter((track) => track.layer === layer)
 		.map((track) => ({
@@ -46,7 +48,7 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 			y1: track.start.y,
 			x2: track.end.x,
 			y2: track.end.y,
-			width: Math.max(track.width, settings.minimumTrackWidthMm)
+			width: track.width
 		}));
 
 	const pads: ScenePad[] = board.pads
@@ -58,7 +60,7 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 					circle: {
 						cx: pad.position.x,
 						cy: pad.position.y,
-						r: Math.max(pad.shape.diameter, settings.minimumViaSizeMm) / 2
+						r: pad.shape.diameter / 2
 					}
 				};
 			}
@@ -89,8 +91,8 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 
 	const toolpath = buildLayerToolpath(board, layer, {
 		isolationOffset: effectiveToolDiameterMm(settings) / 2,
-		minimumTrackWidth: settings.minimumTrackWidthMm,
-		minimumPadDiameter: settings.minimumViaSizeMm
+		minimumTrackWidth: 0,
+		minimumPadDiameter: 0
 	}).segments.map(segmentToSvgPath);
 
 	return { width: board.width, height: board.height, tracks, pads, drills, registration, toolpath };

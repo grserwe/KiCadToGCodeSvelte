@@ -10,6 +10,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 - All pad shapes: circle, oval, rect, roundrect (incl. chamfered), trapezoid, and custom polygon (e.g. hexagonal) pads; ground pads get thermal-relief gaps
 - SVG preview of both board sides: copper, engraving paths, drills, registration holes, zoom/pan
 - Configurable CNC settings (feeds, speeds, depths, origin, units), persisted in the browser
+- Clearance-aware minimum widths: thin traces and small pads are widened to your configured minimums (so copper doesn't peel during machining), capped automatically wherever copper on another net is too close — widening can never cause a short, and blocked spots are reported
 - All processing client-side in a Web Worker — your design never leaves your machine
 - Recoverable problems surface as warnings (oval slot holes, copper zones, curved traces, inner layers) instead of failures
 

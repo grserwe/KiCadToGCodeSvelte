@@ -1,10 +1,14 @@
 import type { BoardModel, EngineWarning, LayerId, Vec2 } from '../model/types';
 import { buildLayerToolpath } from '../toolpath/assemble';
+import { applyMinimumWidths } from '../toolpath/widening';
 import { arcPoint, type PathSegment } from '../toolpath/segments';
 import { distance } from '../geometry/primitives';
 import * as g from './format';
 import { createOutputTransform, type OutputTransform } from './transforms';
 import { effectiveToolDiameterMm, type GCodeSettings } from './settings';
+
+/** Different-net copper keeps at least this gap even with a very fine tool. */
+const MINIMUM_CLEARANCE_MM = 0.1;
 
 export interface GCodeFile {
 	fileName: string;
@@ -18,11 +22,13 @@ export interface GCodeFile {
 export interface GenerateResult {
 	files: GCodeFile[];
 	warnings: EngineWarning[];
+	/** The board as machined: thin tracks/pads widened (clearance-capped). */
+	board: BoardModel;
 }
 
 /** Generate every output file for a board. */
 export function generateGCode(
-	board: BoardModel,
+	designedBoard: BoardModel,
 	boardName: string,
 	settings: GCodeSettings,
 	generatedAt: Date
@@ -30,6 +36,16 @@ export function generateGCode(
 	const warnings: EngineWarning[] = [];
 	const files: GCodeFile[] = [];
 	const extension = settings.fileExtension || '.txt';
+
+	// Widen thin copper toward the configured minimums first, capped so
+	// different-net features keep an isolation channel between them.
+	const widening = applyMinimumWidths(designedBoard, {
+		minimumTrackWidthMm: settings.minimumTrackWidthMm,
+		minimumPadDiameterMm: settings.minimumViaSizeMm,
+		clearanceMm: Math.max(effectiveToolDiameterMm(settings), MINIMUM_CLEARANCE_MM)
+	});
+	const board = widening.board;
+	warnings.push(...widening.warnings);
 
 	for (const layer of ['top', 'bottom'] as const) {
 		const { lines, warnings: layerWarnings } = isolationFile(
@@ -56,7 +72,7 @@ export function generateGCode(
 		files.push(file);
 	}
 
-	return { files, warnings };
+	return { files, warnings, board };
 }
 
 function header(
@@ -157,10 +173,12 @@ function isolationFile(
 
 	for (let pass = 0; pass < Math.max(1, settings.isolationPasses); pass++) {
 		const isolationOffset = toolDiameter / 2 + pass * settings.isolationStepover * toolDiameter;
+		// Minimum widths were already applied (clearance-capped) to the board;
+		// clamping again here could undo a cap and short the board.
 		const toolpath = buildLayerToolpath(board, layer, {
 			isolationOffset,
-			minimumTrackWidth: settings.minimumTrackWidthMm,
-			minimumPadDiameter: settings.minimumViaSizeMm
+			minimumTrackWidth: 0,
+			minimumPadDiameter: 0
 		});
 		if (pass === 0) {
 			warnings.push(...toolpath.warnings);

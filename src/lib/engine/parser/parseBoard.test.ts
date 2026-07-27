@@ -29,6 +29,11 @@ describe('parseBoard — KiCad 9 sample (TopAndBottomLayer)', () => {
 		expect(top!.end.y).toBeCloseTo(4.445, 6);
 		expect(top!.width).toBeCloseTo(0.25, 6);
 
+		// Net numbers survive into the model (the widening pass depends on
+		// them to tell connected copper from potential shorts).
+		expect(top!.net).toBe(1);
+		expect(bottom!.net).toBe(2);
+
 		// The bottom track sits 1mm below in KiCad's Y-down view → smaller Y here.
 		expect(bottom!.start.y).toBeCloseTo(3.445, 6);
 	});
@@ -55,6 +60,9 @@ describe('parseBoard — KiCad 9 sample (TopAndBottomLayer)', () => {
 		// J1 pad 2 is 1mm below pad 1 in KiCad's view → 1mm less Y here.
 		const j1pad2 = board.pads.find((p) => p.padName === '2' && p.position.x < 10);
 		expect(j1pad2!.position.y).toBeCloseTo(3.445, 6);
+
+		expect(j1pad1!.net).toBe(1);
+		expect(j1pad2!.net).toBe(2);
 	});
 
 	it('produces no warnings for a fully supported board', () => {

@@ -8,6 +8,7 @@ export interface RawTrack {
 	end: Vec2;
 	width: number;
 	layer: LayerId;
+	net: number;
 }
 
 function copperLayer(layerName: string | undefined): LayerId | 'inner' | 'none' {
@@ -62,7 +63,8 @@ export function extractTracks(root: SExpr, warnings: EngineWarning[]): RawTrack[
 			start: { x: startX, y: startY },
 			end: { x: endX, y: endY },
 			width,
-			layer
+			layer,
+			net: numberAttr(findChild(segment, 'net'), 0) ?? 0
 		});
 	}
 

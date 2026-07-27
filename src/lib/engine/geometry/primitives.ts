@@ -94,6 +94,43 @@ export function pointWithinSegmentBounds(point: Vec2, segment: Segment2): boolea
 	);
 }
 
+/** Shortest distance from a point to a segment. */
+export function pointToSegmentDistance(point: Vec2, segment: Segment2): number {
+	const dx = segment.end.x - segment.start.x;
+	const dy = segment.end.y - segment.start.y;
+	const lengthSquared = dx * dx + dy * dy;
+	let ratio = 0;
+	if (lengthSquared > 0) {
+		ratio = ((point.x - segment.start.x) * dx + (point.y - segment.start.y) * dy) / lengthSquared;
+		ratio = Math.max(0, Math.min(1, ratio));
+	}
+	return distance(point, {
+		x: segment.start.x + dx * ratio,
+		y: segment.start.y + dy * ratio
+	});
+}
+
+/** Shortest distance between two segments (0 when they cross). */
+export function segmentToSegmentDistance(a: Segment2, b: Segment2): number {
+	if (segmentsCross(a, b)) return 0;
+	return Math.min(
+		pointToSegmentDistance(a.start, b),
+		pointToSegmentDistance(a.end, b),
+		pointToSegmentDistance(b.start, a),
+		pointToSegmentDistance(b.end, a)
+	);
+}
+
+function segmentsCross(a: Segment2, b: Segment2): boolean {
+	const orient = (p: Vec2, q: Vec2, r: Vec2): number =>
+		Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+	const o1 = orient(a.start, a.end, b.start);
+	const o2 = orient(a.start, a.end, b.end);
+	const o3 = orient(b.start, b.end, a.start);
+	const o4 = orient(b.start, b.end, a.end);
+	return o1 !== o2 && o3 !== o4 && o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0;
+}
+
 /** Whether two segments' directions are within ~1 degree of parallel. */
 export function roughlyParallel(a: Segment2, b: Segment2): boolean {
 	const dx1 = a.end.x - a.start.x;

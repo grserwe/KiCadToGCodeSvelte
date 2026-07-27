@@ -5,6 +5,7 @@
 export { parseBoard, type ParseBoardResult } from './parser/parseBoard';
 export { BoardParseError } from './parser/errors';
 export { buildLayerToolpath, type LayerToolpath, type ToolpathOptions } from './toolpath/assemble';
+export { applyMinimumWidths, type WideningOptions, type WideningResult } from './toolpath/widening';
 export { generateGCode, type GCodeFile, type GenerateResult } from './gcode/emit';
 export {
 	defaultSettings,

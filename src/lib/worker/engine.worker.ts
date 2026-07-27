@@ -36,7 +36,9 @@ self.onmessage = (event: MessageEvent<EngineRequest>) => {
 		const response: EngineResponse = {
 			id: request.id,
 			ok: true,
-			board,
+			// The as-machined board (widths applied) so the preview shows what
+			// will actually be cut.
+			board: generation.board,
 			warnings: [...warnings, ...generation.warnings],
 			files: generation.files
 		};

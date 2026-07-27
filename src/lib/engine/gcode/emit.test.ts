@@ -81,10 +81,15 @@ describe('generateGCode', () => {
 		expect(top.content).toContain('Y4.6700');
 		// Bottom track (model y=3.445) offset lines at 3.445 ± 0.225; x mirrored.
 		expect(bottom.content).toContain('Y3.6700');
-		// The rect pad edge at model x = 18.415 + 0.85 mirrors to 21.59 − 19.265.
-		expect(bottom.content).toContain('X2.3250');
-		// And the circle pad at model x = 3.635 mirrors to 17.955 (arc around it).
-		expect(bottom.content).toContain('X17.1050 Y3.4450');
+		// Pads keep their designed 0.85 size (widening is clearance-blocked at
+		// this tool width): rect isolation edge at 18.415 + 0.425 + 0.1 mirrors
+		// to 21.59 − 18.94 = 2.65.
+		expect(bottom.content).toContain('X2.6500');
+		// The offset line clipped onto the circle pad's isolation boundary:
+		// model x = 3.635 + sqrt(0.525² − 0.225²) mirrors to 17.4807.
+		expect(bottom.content).toContain('X17.4807 Y3.6700');
+		// And the blocked widening is reported.
+		expect(result.warnings.some((w) => w.code === 'clearance')).toBe(true);
 	});
 
 	it('emits registration holes outside the board on the horizontal centerline', () => {

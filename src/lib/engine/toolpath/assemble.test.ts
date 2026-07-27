@@ -23,6 +23,7 @@ function circlePad(x: number, y: number, diameter: number, overrides: Partial<Pa
 		isGround: false,
 		plated: true,
 		source: 'footprint',
+		net: 1,
 		...overrides
 	};
 }
@@ -30,7 +31,7 @@ function circlePad(x: number, y: number, diameter: number, overrides: Partial<Pa
 describe('buildLayerToolpath', () => {
 	it('emits two offset lines for a lone track', () => {
 		const result = buildLayerToolpath(
-			board([{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 1, layer: 'top' }], []),
+			board([{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 1, layer: 'top', net: 1 }], []),
 			'top',
 			OPTIONS
 		);
@@ -42,7 +43,10 @@ describe('buildLayerToolpath', () => {
 
 	it('widens thin tracks to the minimum track width', () => {
 		const result = buildLayerToolpath(
-			board([{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 0.01, layer: 'top' }], []),
+			board(
+				[{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 0.01, layer: 'top', net: 1 }],
+				[]
+			),
 			'top',
 			OPTIONS
 		);
@@ -53,7 +57,7 @@ describe('buildLayerToolpath', () => {
 	it('ignores tracks and pads on the other layer', () => {
 		const result = buildLayerToolpath(
 			board(
-				[{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 1, layer: 'bottom' }],
+				[{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 1, layer: 'bottom', net: 1 }],
 				[circlePad(20, 20, 2, { layers: 'bottom' })]
 			),
 			'top',
@@ -90,7 +94,7 @@ describe('buildLayerToolpath', () => {
 	it('connects a track to a pad with a gap in the pad ring', () => {
 		const result = buildLayerToolpath(
 			board(
-				[{ start: { x: 10, y: 10 }, end: { x: 20, y: 10 }, width: 1, layer: 'top' }],
+				[{ start: { x: 10, y: 10 }, end: { x: 20, y: 10 }, width: 1, layer: 'top', net: 1 }],
 				[circlePad(10, 10, 3)]
 			),
 			'top',
@@ -118,7 +122,7 @@ describe('buildLayerToolpath', () => {
 	it('applies the isolation offset to tracks and pads together', () => {
 		const result = buildLayerToolpath(
 			board(
-				[{ start: { x: 10, y: 10 }, end: { x: 20, y: 10 }, width: 1, layer: 'top' }],
+				[{ start: { x: 10, y: 10 }, end: { x: 20, y: 10 }, width: 1, layer: 'top', net: 1 }],
 				[circlePad(10, 10, 3)]
 			),
 			'top',
@@ -146,8 +150,8 @@ describe('buildLayerToolpath', () => {
 		const result = buildLayerToolpath(
 			board(
 				[
-					{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 0.8, layer: 'top' },
-					{ start: { x: 15, y: 5 }, end: { x: 15, y: 15 }, width: 0.8, layer: 'top' }
+					{ start: { x: 5, y: 5 }, end: { x: 15, y: 5 }, width: 0.8, layer: 'top', net: 1 },
+					{ start: { x: 15, y: 5 }, end: { x: 15, y: 15 }, width: 0.8, layer: 'top', net: 1 }
 				],
 				[circlePad(5, 5, 2), circlePad(15, 15, 2)]
 			),

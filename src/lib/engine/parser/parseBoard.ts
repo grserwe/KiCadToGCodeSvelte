@@ -58,7 +58,8 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 		start: toLocal(track.start),
 		end: toLocal(track.end),
 		width: track.width,
-		layer: track.layer
+		layer: track.layer,
+		net: track.net
 	}));
 
 	const pads: Pad[] = rawPads.map((pad) => ({
