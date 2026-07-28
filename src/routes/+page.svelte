@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import FileDrop from '$lib/components/FileDrop.svelte';
 	import Stepper from '$lib/components/Stepper.svelte';
@@ -26,6 +27,8 @@
 	let zipCandidates = $state<PcbCandidate[] | null>(null);
 
 	// Persist settings whenever they change, and regenerate the current board.
+	// Only `settings` may be tracked here: `convert()` reassigns `boardSource`, so
+	// reading it reactively would make every regeneration schedule another one.
 	let settingsInitialized = false;
 	let regenerateTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
@@ -35,12 +38,13 @@
 			return;
 		}
 		saveSettings(snapshot);
-		if (boardSource) {
+		untrack(() => {
+			if (!boardSource) return;
 			clearTimeout(regenerateTimer);
 			regenerateTimer = setTimeout(() => {
 				if (boardSource) convert(boardSource.name, boardSource.contents);
 			}, 400);
-		}
+		});
 	});
 
 	function resetSettings() {
@@ -207,10 +211,12 @@
 			</section>
 		{:else}
 			<div class="mb-6">
-				<Stepper current={converting ? 2 : result ? 3 : 2} />
+				<Stepper current={result ? 3 : 2} />
 			</div>
 
-			{#if converting}
+			<!-- Only take over the page for the first conversion; regenerating after a
+				 settings change keeps the existing preview on screen. -->
+			{#if converting && !result}
 				<p class="py-16 text-center text-lg text-slate-600">Generating toolpaths…</p>
 			{:else if error}
 				<section class="mx-auto max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6">
@@ -254,6 +260,7 @@
 							{/if}
 							<p class="text-sm text-slate-500">
 								{boardSource.name} — {scene.width.toFixed(1)} × {scene.height.toFixed(1)} mm
+								{#if converting}<span class="text-amber-700">· updating…</span>{/if}
 							</p>
 						</div>
 						<BoardPreview {scene} mirrored={showMirrored} />

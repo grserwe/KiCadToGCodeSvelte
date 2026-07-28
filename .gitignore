@@ -27,5 +27,6 @@ vite.config.ts.timestamp-*
 /playwright-report
 /playwright/.cache
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings (the dev server is launched from the workspace-root
+# .claude/launch.json, so nothing in here belongs to the repo)
+.claude/
