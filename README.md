@@ -17,7 +17,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 ## How the toolpaths are made
 
 1. **Parse** — a character-level S-expression tokenizer reads the `.kicad_pcb` into a board model in board-local, Y-up millimeter coordinates. Legacy (`module`) and modern (`footprint`) dialects both supported.
-2. **Offset** — every track becomes two parallel lines at `width/2 + tool radius`; where tracks meet, the lines are mitered or joined by angular adjacency.
+2. **Offset** — every track becomes two parallel lines at `width/2 + tool radius`; where tracks meet, the lines are mitered or joined by angular adjacency. A track that runs through a pad (a component lead sitting mid-track) is first split at that pad so both pieces end inside it.
 3. **Pad isolation** — circular pads become arcs with gaps where tracks enter; other shapes build an outline (lines + corner arcs, inflated exactly by the tool radius) and gaps are cut out as perimeter intervals.
 4. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
 

@@ -1,4 +1,4 @@
-import type { BoardModel, EngineWarning, LayerId, Pad, Vec2 } from '../model/types';
+import type { BoardModel, EngineWarning, LayerId, Pad, Track, Vec2 } from '../model/types';
 import { distance } from '../geometry/primitives';
 import { collectJunctions, completeJunction } from '../geometry/junctions';
 import { CircularPadGeometry } from '../geometry/circularPad';
@@ -41,38 +41,46 @@ export function buildLayerToolpath(
 ): LayerToolpath {
 	const warnings: EngineWarning[] = [];
 
-	// 1. Tracks become routes with two plain parallel offset lines.
-	const routes: RouteGeom[] = board.tracks
-		.filter((track) => track.layer === layer)
-		.map((track) =>
-			createRoute(
-				track.start,
-				track.end,
-				Math.max(track.width, options.minimumTrackWidth),
-				Math.max(track.width, options.minimumTrackWidth) / 2 + options.isolationOffset,
-				layer
-			)
-		);
-
-	// 2. Junction trimming: miter or join offset lines where tracks meet.
-	for (const junction of collectJunctions(routes)) {
-		completeJunction(junction);
-	}
-
-	// 3. Pads on this layer clip the offset lines and record which routes
-	//    touch them (which is where their isolation gaps go).
+	// 1. Pads on this layer, inflated by the isolation offset.
 	const pads = board.pads
 		.filter((pad) => pad.plated && (pad.layers === layer || pad.layers === 'through'))
 		.map((pad) => createPadGeometry(pad, options, warnings))
 		.filter((geometry): geometry is PadGeometry => geometry !== null);
 
+	// 2. Tracks become routes with two plain parallel offset lines. Tracks are
+	//    first split wherever another track or a pad joins them mid-length
+	//    (T-junctions, component leads sitting on a track), so that every
+	//    meeting point is a junction of endpoints and the trimming below never
+	//    cuts straight through copper.
+	const trackWidth = (track: Track) => Math.max(track.width, options.minimumTrackWidth);
+	const routes: RouteGeom[] = splitTracksAtMidpointJoins(
+		board.tracks.filter((track) => track.layer === layer),
+		pads,
+		(track) => trackWidth(track) / 2 + options.isolationOffset
+	).map((track) =>
+		createRoute(
+			track.start,
+			track.end,
+			trackWidth(track),
+			trackWidth(track) / 2 + options.isolationOffset,
+			layer
+		)
+	);
+
+	// 3. Junction trimming: miter or join offset lines where tracks meet.
+	for (const junction of collectJunctions(routes)) {
+		completeJunction(junction);
+	}
+
+	// 4. Pads clip the offset lines and record which routes touch them
+	//    (which is where their isolation gaps go).
 	for (const pad of pads) {
 		for (const route of routes) {
 			trimRouteAgainstPad(pad, route);
 		}
 	}
 
-	// 4. Collect all cut segments.
+	// 5. Collect all cut segments.
 	const segments: PathSegment[] = [];
 	for (const route of routes) {
 		for (const line of [route.line1, route.line2]) {
@@ -134,6 +142,91 @@ function createPadGeometry(
 	const edges = buildPadOutline(shape, pad.rotationDeg, pad.position, options.isolationOffset);
 	if (edges.length === 0) return null;
 	return new OutlinePadGeometry(pad.position, edges, pad.isGround);
+}
+
+/** A track endpoint resting on another track's centerline is a T-junction. */
+const TEE_JUNCTION_TOLERANCE = 0.001;
+
+/**
+ * Split tracks wherever something else joins them mid-length, so every meeting
+ * point is a junction of track ENDPOINTS (the only kind the junction trimming
+ * understands):
+ *
+ * - **T-junctions** — another track's endpoint lies on this track's
+ *   centerline, strictly between its ends. Without a split the trunk's offset
+ *   line would run straight through the stub's copper.
+ * - **Pads sitting along the track** (a component lead mid-track) — the point
+ *   of the track nearest the pad center is strictly between the ends and
+ *   either it or its counterpart on an offset line falls inside the pad's
+ *   isolation outline, while neither track endpoint does (that case is the
+ *   ordinary "track ends in a pad" clip). Cut at the nearest point so both
+ *   pieces end inside the pad.
+ */
+function splitTracksAtMidpointJoins(
+	tracks: Track[],
+	pads: PadGeometry[],
+	offsetDistanceOf: (track: Track) => number
+): Track[] {
+	const result: Track[] = [];
+
+	for (const track of tracks) {
+		const length = distance(track.start, track.end);
+		if (length <= MINIMUM_SEGMENT_LENGTH) {
+			result.push(track);
+			continue;
+		}
+		const direction = {
+			x: (track.end.x - track.start.x) / length,
+			y: (track.end.y - track.start.y) / length
+		};
+		const leftNormal = { x: -direction.y, y: direction.x };
+		const offsetDistance = offsetDistanceOf(track);
+		const alongOf = (point: Vec2): number =>
+			(point.x - track.start.x) * direction.x + (point.y - track.start.y) * direction.y;
+		const isInterior = (along: number): boolean =>
+			along > MINIMUM_SEGMENT_LENGTH && along < length - MINIMUM_SEGMENT_LENGTH;
+		const pointAlong = (along: number): Vec2 => ({
+			x: track.start.x + direction.x * along,
+			y: track.start.y + direction.y * along
+		});
+
+		const cuts: { along: number; point: Vec2 }[] = [];
+
+		for (const other of tracks) {
+			if (other === track) continue;
+			for (const endpoint of [other.start, other.end]) {
+				const along = alongOf(endpoint);
+				if (!isInterior(along)) continue;
+				if (distance(endpoint, pointAlong(along)) > TEE_JUNCTION_TOLERANCE) continue;
+				// Cut at the stub's own endpoint so the junction keys match exactly.
+				cuts.push({ along, point: endpoint });
+			}
+		}
+
+		for (const pad of pads) {
+			if (pad.containsPoint(track.start) || pad.containsPoint(track.end)) continue;
+			const along = alongOf(pad.center);
+			if (!isInterior(along)) continue;
+			const foot = pointAlong(along);
+			const touches = [0, offsetDistance, -offsetDistance].some((side) =>
+				pad.containsPoint({ x: foot.x + leftNormal.x * side, y: foot.y + leftNormal.y * side })
+			);
+			if (touches) cuts.push({ along, point: foot });
+		}
+
+		cuts.sort((a, b) => a.along - b.along);
+		let previousAlong = 0;
+		let previousPoint = track.start;
+		for (const cut of cuts) {
+			if (cut.along - previousAlong <= MINIMUM_SEGMENT_LENGTH) continue;
+			result.push({ ...track, start: previousPoint, end: cut.point });
+			previousAlong = cut.along;
+			previousPoint = cut.point;
+		}
+		result.push({ ...track, start: previousPoint, end: track.end });
+	}
+
+	return result;
 }
 
 /**
