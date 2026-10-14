@@ -51,6 +51,11 @@ export interface GCodeSettings {
 		marginMm: number;
 	};
 
+	/** Silkscreen SVG for laser marking the component side (LightBurn import). */
+	silkscreen: {
+		enabled: boolean;
+	};
+
 	fileExtension: string;
 }
 
@@ -91,6 +96,10 @@ export function defaultSettings(): GCodeSettings {
 			enabled: true,
 			diameterMm: 3.175,
 			marginMm: 5
+		},
+
+		silkscreen: {
+			enabled: true
 		},
 
 		fileExtension: '.txt'

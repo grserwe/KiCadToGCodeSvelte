@@ -10,7 +10,7 @@ const OPTIONS: ToolpathOptions = {
 };
 
 function board(tracks: Track[], pads: Pad[]): BoardModel {
-	return { width: 30, height: 30, fileVersion: 20241229, tracks, pads };
+	return { width: 30, height: 30, fileVersion: 20241229, tracks, pads, graphics: [] };
 }
 
 function circlePad(x: number, y: number, diameter: number, overrides: Partial<Pad> = {}): Pad {

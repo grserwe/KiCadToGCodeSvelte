@@ -24,11 +24,12 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 	await expect(preview).toBeVisible();
 	expect(await preview.locator('line').count()).toBeGreaterThan(0);
 
-	// All four expected files are listed.
+	// All five expected files are listed.
 	await expect(page.getByText('SampleBoard-top-isolation.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-bottom-isolation.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-drill-0.5mm.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-registration.txt')).toBeVisible();
+	await expect(page.getByText('SampleBoard-silkscreen-top.svg')).toBeVisible();
 
 	// Switch to the bottom side.
 	await page.getByRole('tab', { name: /bottom side/i }).click();
@@ -47,7 +48,7 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 	const zipPromise = page.waitForEvent('download');
 	await page.getByRole('button', { name: /download all/i }).click();
 	const zip = await zipPromise;
-	expect(zip.suggestedFilename()).toBe('SampleBoard-gcode.zip');
+	expect(zip.suggestedFilename()).toBe('SampleBoard-output.zip');
 });
 
 test('settings changes regenerate output and persist across reloads', async ({ page }) => {

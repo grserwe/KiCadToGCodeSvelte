@@ -1,10 +1,12 @@
 import { parseSExpression } from '../sexpr/tokenizer';
-import type { BoardModel, EngineWarning, Pad, Track, Vec2 } from '../model/types';
+import type { BoardModel, EngineWarning, Graphic, Pad, Track, Vec2 } from '../model/types';
 import { dialectForVersion } from './dialect';
 import { BoardParseError } from './errors';
 import { computeExtents, type FileExtents } from './extents';
 import { extractPads } from './pads';
 import { extractTracks } from './tracks';
+import { extractGraphics, type RawGraphic } from './graphics';
+import { arcThroughPoints } from '../geometry/arcs';
 import { childNumber } from './sexprHelpers';
 
 export interface ParseBoardResult {
@@ -46,6 +48,7 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 
 	const rawTracks = extractTracks(root, warnings);
 	const rawPads = extractPads(root, dialect, warnings);
+	const rawGraphics = extractGraphics(root, dialect, warnings);
 	const extents = computeExtents(root, rawPads, rawTracks);
 
 	// File coords (Y-down, absolute) → board-local (Y-up, origin lower-left).
@@ -75,13 +78,20 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 				: pad.shape
 	}));
 
+	const graphics: Graphic[] = [];
+	for (const raw of rawGraphics) {
+		const graphic = localizeGraphic(raw, toLocal);
+		if (graphic) graphics.push(graphic);
+	}
+
 	return {
 		board: {
 			width: width(extents),
 			height: height(extents),
 			fileVersion,
 			tracks,
-			pads
+			pads,
+			graphics
 		},
 		warnings
 	};
@@ -89,3 +99,28 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 
 const width = (extents: FileExtents): number => extents.maxX - extents.minX;
 const height = (extents: FileExtents): number => extents.maxY - extents.minY;
+
+/** Map a drawing into board-local Y-up coordinates; the Y flip reverses arcs. */
+function localizeGraphic(raw: RawGraphic, toLocal: (point: Vec2) => Vec2): Graphic | null {
+	switch (raw.kind) {
+		case 'line':
+			return { ...raw, start: toLocal(raw.start), end: toLocal(raw.end) };
+		case 'arc': {
+			const start = toLocal(raw.start);
+			const mid = toLocal(raw.mid);
+			const end = toLocal(raw.end);
+			const arc = arcThroughPoints(start, mid, end);
+			if (!arc) {
+				// Degenerate (collinear) arc: keep it as a straight line.
+				return { kind: 'line', layer: raw.layer, start, end, width: raw.width };
+			}
+			return { kind: 'arc', layer: raw.layer, width: raw.width, ...arc };
+		}
+		case 'circle':
+			return { ...raw, center: toLocal(raw.center) };
+		case 'polygon':
+			return { ...raw, points: raw.points.map(toLocal) };
+		case 'text':
+			return { ...raw, position: toLocal(raw.position) };
+	}
+}

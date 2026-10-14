@@ -19,7 +19,8 @@
 		isolation: false,
 		drilling: false,
 		output: false,
-		doubleSided: false
+		doubleSided: false,
+		silkscreen: false
 	});
 
 	const vBitEnabled = $derived(settings.vBitAngleDeg !== null);
@@ -53,7 +54,7 @@
 {/snippet}
 
 {#snippet group(
-	id: 'tool' | 'isolation' | 'drilling' | 'output' | 'doubleSided',
+	id: 'tool' | 'isolation' | 'drilling' | 'output' | 'doubleSided' | 'silkscreen',
 	title: string,
 	body: import('svelte').Snippet
 )}
@@ -321,4 +322,22 @@
 		{/if}
 	{/snippet}
 	{@render group('doubleSided', 'Double-sided machining', doubleSidedBody)}
+
+	{#snippet silkscreenBody()}
+		<label class="flex items-center justify-between gap-2 py-1">
+			<span class="text-sm text-slate-600">Silkscreen SVG for laser</span>
+			<input type="checkbox" class="rounded" bind:checked={settings.silkscreen.enabled} />
+		</label>
+		<p class="py-1 text-xs text-slate-400">
+			An SVG of the silkscreen drawings, sized in mm, ready to import into LightBurn and burn onto
+			the board. Silk lines are black (cut as Line), filled shapes blue (Fill), and the board
+			outline plus registration holes red — use that layer to line up with the milled board, then
+			turn its output off. Text (reference designators) isn't included yet.
+		</p>
+		<p class="py-1 text-xs text-slate-400">
+			Lasering FR4 releases epoxy and flame-retardant fumes: use extraction. A white marking spray
+			on the board first gives far better contrast than bare FR4.
+		</p>
+	{/snippet}
+	{@render group('silkscreen', 'Silkscreen (laser)', silkscreenBody)}
 </section>

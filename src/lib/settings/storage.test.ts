@@ -41,6 +41,20 @@ describe('settings storage', () => {
 		expect(loaded.registrationHoles).toEqual(defaultSettings().registrationHoles);
 	});
 
+	it('merges nested groups stored before a key was added', () => {
+		const storage = new FakeStorage();
+		storage.setItem(
+			'kicadtogcode.settings.v1',
+			JSON.stringify({ silkscreen: {}, registrationHoles: { marginMm: 9 } })
+		);
+		const loaded = loadSettings(storage);
+		expect(loaded.silkscreen).toEqual(defaultSettings().silkscreen);
+		expect(loaded.registrationHoles).toEqual({
+			...defaultSettings().registrationHoles,
+			marginMm: 9
+		});
+	});
+
 	it('ignores stored values of the wrong type', () => {
 		const storage = new FakeStorage();
 		storage.setItem(

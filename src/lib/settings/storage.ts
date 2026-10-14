@@ -13,14 +13,7 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): 
 		const raw = storage.getItem(STORAGE_KEY);
 		if (!raw) return defaults;
 		const stored = JSON.parse(raw) as Partial<GCodeSettings>;
-		return {
-			...defaults,
-			...sanitize(stored, defaults),
-			registrationHoles: {
-				...defaults.registrationHoles,
-				...(typeof stored.registrationHoles === 'object' ? stored.registrationHoles : {})
-			}
-		};
+		return { ...defaults, ...sanitize(stored, defaults) };
 	} catch {
 		return defaults;
 	}
@@ -45,13 +38,21 @@ export function clearSettings(storage: Pick<Storage, 'removeItem'> = localStorag
 	}
 }
 
-/** Keep only keys whose stored type matches the default's type. */
+/**
+ * Keep only keys whose stored type matches the default's type. Nested setting
+ * groups are merged over their defaults so a group can grow new keys later.
+ */
 function sanitize(stored: Partial<GCodeSettings>, defaults: GCodeSettings): Partial<GCodeSettings> {
 	const clean: Record<string, unknown> = {};
 	for (const [key, defaultValue] of Object.entries(defaults)) {
 		const storedValue = (stored as Record<string, unknown>)[key];
 		if (storedValue === undefined) continue;
-		if (key === 'registrationHoles') continue; // merged separately
+		if (defaultValue !== null && typeof defaultValue === 'object') {
+			const storedGroup =
+				storedValue !== null && typeof storedValue === 'object' ? storedValue : {};
+			clean[key] = { ...defaultValue, ...storedGroup };
+			continue;
+		}
 		if (key === 'vBitAngleDeg') {
 			if (storedValue === null || typeof storedValue === 'number') clean[key] = storedValue;
 			continue;

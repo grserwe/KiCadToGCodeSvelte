@@ -7,11 +7,23 @@ export { BoardParseError } from './parser/errors';
 export { buildLayerToolpath, type LayerToolpath, type ToolpathOptions } from './toolpath/assemble';
 export { applyMinimumWidths, type WideningOptions, type WideningResult } from './toolpath/widening';
 export { generateGCode, type GCodeFile, type GenerateResult } from './gcode/emit';
+export { generateSilkscreenFiles, type SilkscreenResult } from './silkscreen/svg';
+export { graphicToSvgPath } from './silkscreen/svgPath';
 export {
 	defaultSettings,
 	effectiveToolDiameterMm,
 	type GCodeSettings,
 	type XYZeroPosition
 } from './gcode/settings';
-export type { BoardModel, EngineWarning, LayerId, Pad, PadShape, Track, Vec2 } from './model/types';
+export type {
+	BoardModel,
+	EngineWarning,
+	Graphic,
+	GraphicLayer,
+	LayerId,
+	Pad,
+	PadShape,
+	Track,
+	Vec2
+} from './model/types';
 export type { PathSegment, LineSeg, ArcSeg } from './toolpath/segments';

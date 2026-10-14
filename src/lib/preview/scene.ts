@@ -1,8 +1,9 @@
-import type { BoardModel, LayerId } from '../engine/model/types';
+import type { BoardModel, Graphic, LayerId } from '../engine/model/types';
 import { buildPadOutline, type OutlineEdge } from '../engine/geometry/outline';
 import { buildLayerToolpath } from '../engine/toolpath/assemble';
 import { effectiveToolDiameterMm, type GCodeSettings } from '../engine/gcode/settings';
 import { segmentToSvgPath } from './svgPath';
+import { graphicToSvgPath } from '../engine/silkscreen/svgPath';
 
 export interface SceneTrack {
 	x1: number;
@@ -16,6 +17,13 @@ export interface ScenePad {
 	/** SVG path for outline shapes, or null when the pad is a plain circle. */
 	path: string | null;
 	circle: { cx: number; cy: number; r: number } | null;
+}
+
+export interface SceneGraphic {
+	/** SVG path in model space (Y-up mm). */
+	d: string;
+	width: number;
+	filled: boolean;
 }
 
 export interface SceneDrill {
@@ -35,6 +43,10 @@ export interface BoardScene {
 	registration: SceneDrill[];
 	/** Isolation toolpath (first pass) as SVG path strings. */
 	toolpath: string[];
+	/** Silkscreen drawings for this side (text is not rendered yet). */
+	silkscreen: SceneGraphic[];
+	/** Edge.Cuts board outline, when the file has one. */
+	outline: string[];
 }
 
 /** Build the renderable scene for one side directly from the geometry model. */
@@ -95,7 +107,35 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 		minimumPadDiameter: 0
 	}).segments.map(segmentToSvgPath);
 
-	return { width: board.width, height: board.height, tracks, pads, drills, registration, toolpath };
+	const silkLayer = layer === 'top' ? 'silk-top' : 'silk-bottom';
+	const silkscreen: SceneGraphic[] = board.graphics
+		.filter(
+			(graphic): graphic is Exclude<Graphic, { kind: 'text' }> =>
+				graphic.layer === silkLayer && graphic.kind !== 'text'
+		)
+		.map((graphic) => ({
+			d: graphicToSvgPath(graphic),
+			width: graphic.width,
+			filled: (graphic.kind === 'circle' || graphic.kind === 'polygon') && graphic.filled
+		}))
+		.filter((graphic) => graphic.d !== '');
+
+	const outline = board.graphics
+		.filter((graphic) => graphic.layer === 'edge')
+		.map((graphic) => graphicToSvgPath(graphic))
+		.filter((d) => d !== '');
+
+	return {
+		width: board.width,
+		height: board.height,
+		tracks,
+		pads,
+		drills,
+		registration,
+		toolpath,
+		silkscreen,
+		outline
+	};
 }
 
 /** A closed pad outline as a single SVG path (Y-up model coordinates). */

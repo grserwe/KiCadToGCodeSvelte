@@ -87,9 +87,54 @@ export interface EngineWarning {
 		| 'track-skipped'
 		| 'drill-offset'
 		| 'width-capped'
-		| 'clearance';
+		| 'clearance'
+		| 'graphic-skipped'
+		| 'silkscreen-text';
 	message: string;
 }
+
+/** Non-copper drawing layers the engine keeps: silkscreen and the board edge. */
+export type GraphicLayer = 'silk-top' | 'silk-bottom' | 'edge';
+
+/**
+ * A drawing primitive from a silkscreen or Edge.Cuts layer, in board-local
+ * Y-up coordinates. Widths are stroke widths in mm. Arc sweeps are
+ * CCW-positive. Text is parsed but not rendered yet (no stroke font).
+ */
+export type Graphic =
+	| { kind: 'line'; layer: GraphicLayer; start: Vec2; end: Vec2; width: number }
+	| {
+			kind: 'arc';
+			layer: GraphicLayer;
+			center: Vec2;
+			radius: number;
+			/** Degrees, 0° = +X, CCW-positive. */
+			startAngle: number;
+			/** Degrees swept from startAngle; positive = CCW. */
+			sweep: number;
+			width: number;
+	  }
+	| {
+			kind: 'circle';
+			layer: GraphicLayer;
+			center: Vec2;
+			radius: number;
+			width: number;
+			filled: boolean;
+	  }
+	| { kind: 'polygon'; layer: GraphicLayer; points: Vec2[]; width: number; filled: boolean }
+	| {
+			kind: 'text';
+			layer: GraphicLayer;
+			text: string;
+			position: Vec2;
+			/** Degrees, CCW-positive. */
+			rotationDeg: number;
+			/** Glyph height in mm. */
+			height: number;
+			/** Stroke thickness in mm. */
+			thickness: number;
+	  };
 
 export interface BoardModel {
 	/** Board extents in mm (from Edge.Cuts when available). */
@@ -99,4 +144,6 @@ export interface BoardModel {
 	fileVersion: number;
 	tracks: Track[];
 	pads: Pad[];
+	/** Silkscreen and board-edge drawings (not machined; used for the laser SVG). */
+	graphics: Graphic[];
 }

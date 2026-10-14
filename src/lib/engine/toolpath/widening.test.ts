@@ -7,7 +7,7 @@ import { applyMinimumWidths } from './widening';
 const OPTIONS = { minimumTrackWidthMm: 0.5, minimumPadDiameterMm: 1.5, clearanceMm: 0.2 };
 
 function board(tracks: Track[], pads: Pad[] = []): BoardModel {
-	return { width: 30, height: 30, fileVersion: 20241229, tracks, pads };
+	return { width: 30, height: 30, fileVersion: 20241229, tracks, pads, graphics: [] };
 }
 
 function track(y: number, width: number, net: number, layer: 'top' | 'bottom' = 'top'): Track {

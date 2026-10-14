@@ -288,6 +288,12 @@
 								<li>Engrave the top side, then drill all holes.</li>
 								<li>Flip the board left-over-right onto the pins.</li>
 								<li>Engrave the bottom side.</li>
+								{#if result.files.some((file) => file.kind.startsWith('silkscreen'))}
+									<li>
+										Laser the silkscreen SVG onto the component side, aligned on the registration
+										holes.
+									</li>
+								{/if}
 							</ol>
 						</section>
 					</aside>

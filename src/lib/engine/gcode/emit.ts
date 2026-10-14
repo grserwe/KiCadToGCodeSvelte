@@ -6,18 +6,13 @@ import { distance } from '../geometry/primitives';
 import * as g from './format';
 import { createOutputTransform, type OutputTransform } from './transforms';
 import { effectiveToolDiameterMm, type GCodeSettings } from './settings';
+import type { GCodeFile } from './outputFile';
+import { generateSilkscreenFiles } from '../silkscreen/svg';
+
+export type { GCodeFile } from './outputFile';
 
 /** Different-net copper keeps at least this gap even with a very fine tool. */
 const MINIMUM_CLEARANCE_MM = 0.1;
-
-export interface GCodeFile {
-	fileName: string;
-	/** Human-readable purpose shown in the download list. */
-	label: string;
-	kind: 'isolation-top' | 'isolation-bottom' | 'drill' | 'registration';
-	drillDiameterMm?: number;
-	content: string;
-}
 
 export interface GenerateResult {
 	files: GCodeFile[];
@@ -71,6 +66,10 @@ export function generateGCode(
 	for (const file of drillFiles(board, boardName, settings, generatedAt, extension)) {
 		files.push(file);
 	}
+
+	const silkscreen = generateSilkscreenFiles(board, boardName, settings);
+	files.push(...silkscreen.files);
+	warnings.push(...silkscreen.warnings);
 
 	return { files, warnings, board };
 }

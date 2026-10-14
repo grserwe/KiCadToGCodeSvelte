@@ -11,6 +11,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 - SVG preview of both board sides: copper, engraving paths, drills, registration holes, zoom/pan
 - Configurable CNC settings (feeds, speeds, depths, origin, units), persisted in the browser
 - Clearance-aware minimum widths: thin traces and small pads are widened to your configured minimums (so copper doesn't peel during machining), capped automatically wherever copper on another net is too close — widening can never cause a short, and blocked spots are reported
+- Silkscreen SVG for laser marking: the top (and bottom) silkscreen drawings as a millimetre-sized SVG ready for LightBurn, with the board outline and registration holes on their own colour/layer so the burn lines up with the milled board
 - All processing client-side in a Web Worker — your design never leaves your machine
 - Recoverable problems surface as warnings (oval slot holes, copper zones, curved traces, inner layers) instead of failures
 
@@ -21,8 +22,19 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 3. **Pad isolation** — circular pads become arcs with gaps where tracks enter; other shapes build an outline (lines + corner arcs, inflated exactly by the tool radius) and gaps are cut out as perimeter intervals.
 4. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
 
+## Silkscreen for the laser
+
+The silkscreen output is an SVG, not GCode: LightBurn imports SVG and plans the laser job itself. The parser keeps every `fp_*`/`gr_*` drawing on F.SilkS, B.SilkS and Edge.Cuts (lines, arcs, circles, rectangles, polygons, in both the modern three-point and the KiCad 4/5 centre-and-angle arc dialects), placed with the same footprint transform the pads use. The SVG uses LightBurn's first three palette colours so each kind of geometry arrives on its own layer:
+
+- **black** — silk lines as centreline vectors (a diode laser's spot is about a silk line's width, so a single pass draws them at the right size)
+- **blue** — filled silk shapes, to be cut in Fill mode
+- **red** — the board outline and the registration holes, for aligning the burn to the milled board; set that layer's output off before burning
+
+The bottom side is mirrored left-over-right (the face the laser sees), the same convention as the bottom isolation GCode. Silkscreen _text_ (reference designators, labels) is parsed but not drawn yet — KiCad draws text with its own stroke font, which the engine doesn't carry — and a warning lists how many items were left out.
+
 ## Roadmap (not yet supported)
 
+- Silkscreen text (needs a stroke font)
 - Copper zones / filled pours
 - Curved (arc) traces
 - Board outline cut-out GCode
@@ -42,5 +54,5 @@ npm run build      # production build (adapter-node)
 ## Architecture
 
 - **SvelteKit + TypeScript + Tailwind 4**, `adapter-node`, no database, no auth.
-- The conversion engine is a pure, framework-free TS library in `src/lib/engine/` (`sexpr/` tokenizer → `parser/` → `model/` → `geometry/` → `toolpath/` → `gcode/`), runnable in the browser worker and in vitest.
+- The conversion engine is a pure, framework-free TS library in `src/lib/engine/` (`sexpr/` tokenizer → `parser/` → `model/` → `geometry/` → `toolpath/` → `gcode/`, plus `silkscreen/` for the laser SVG), runnable in the browser worker and in vitest.
 - Deployed on [Fly.io](https://fly.io) via GitHub Actions (`.github/workflows/deploy.yml`): checks on every push/PR, deploy on master.

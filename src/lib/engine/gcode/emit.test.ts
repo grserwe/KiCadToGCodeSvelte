@@ -39,7 +39,9 @@ describe('generateGCode', () => {
 	});
 
 	it('produces GRBL-safe wrapped programs', () => {
-		for (const file of result.files) {
+		const gcodeFiles = result.files.filter((f) => !f.kind.startsWith('silkscreen'));
+		expect(gcodeFiles.length).toBeGreaterThan(0);
+		for (const file of gcodeFiles) {
 			expect(file.content).toContain('G21 (Use Millimeters)');
 			expect(file.content).toContain('G90 (Set Absolute Coordinates)');
 			expect(file.content).toContain('M03 S');

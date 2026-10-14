@@ -128,6 +128,25 @@
 				{/if}
 			{/each}
 
+			{#each scene.outline as path, index (index)}
+				<path d={path} fill="none" stroke="#64748b" stroke-width="0.1" />
+			{/each}
+
+			{#each scene.silkscreen as graphic, index (index)}
+				{#if graphic.filled}
+					<path d={graphic.d} fill="#334155" stroke="none" />
+				{:else}
+					<path
+						d={graphic.d}
+						fill="none"
+						stroke="#334155"
+						stroke-width={graphic.width}
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				{/if}
+			{/each}
+
 			{#each scene.toolpath as path, index (index)}
 				<path d={path} fill="none" stroke="#166534" stroke-width="0.07" />
 			{/each}
@@ -174,6 +193,11 @@
 		<span class="flex items-center gap-1">
 			<span class="inline-block h-0.5 w-4 bg-green-800"></span> Engraving path
 		</span>
+		{#if scene.silkscreen.length}
+			<span class="flex items-center gap-1">
+				<span class="inline-block h-0.5 w-4 bg-slate-700"></span> Silkscreen
+			</span>
+		{/if}
 		{#each diameters as diameter (diameter)}
 			<span class="flex items-center gap-1">
 				<span

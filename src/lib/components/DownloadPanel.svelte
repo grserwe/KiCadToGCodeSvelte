@@ -16,6 +16,10 @@
 				return 2;
 			case 'isolation-bottom':
 				return 3;
+			case 'silkscreen-top':
+				return 4;
+			case 'silkscreen-bottom':
+				return 5;
 		}
 	}
 
@@ -29,7 +33,8 @@
 	}
 
 	function downloadFile(file: GCodeFile) {
-		download(file.fileName, new Blob([file.content], { type: 'text/plain' }));
+		const type = file.fileName.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'text/plain';
+		download(file.fileName, new Blob([file.content], { type }));
 	}
 
 	function downloadAll() {
@@ -39,7 +44,7 @@
 		}
 		const zipped = zipSync(entries);
 		download(
-			`${boardName}-gcode.zip`,
+			`${boardName}-output.zip`,
 			new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
 		);
 	}
@@ -47,7 +52,7 @@
 
 <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 	<div class="mb-3 flex items-center justify-between gap-2">
-		<h2 class="text-lg font-bold text-slate-900">GCode files</h2>
+		<h2 class="text-lg font-bold text-slate-900">Output files</h2>
 		<button
 			type="button"
 			onclick={downloadAll}
