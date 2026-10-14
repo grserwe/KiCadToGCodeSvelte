@@ -247,7 +247,10 @@ test('unticking the PCB checkbox keeps the design out of the report', async ({ p
 	await page.getByRole('button', { name: /try the sample board/i }).click();
 	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
 
-	await page.getByRole('button', { name: /send feedback/i }).click();
+	await page
+		.getByRole('banner')
+		.getByRole('button', { name: /send feedback/i })
+		.click();
 	const dialog = page.getByRole('dialog');
 	await dialog.getByRole('checkbox', { name: /include my pcb file/i }).uncheck();
 	await dialog.getByLabel('Message').fill('Just saying thanks.');

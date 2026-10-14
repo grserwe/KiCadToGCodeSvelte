@@ -1,6 +1,8 @@
 # KiCadToGCode (SvelteKit)
 
-Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on copper-clad board and drilling through-holes — entirely in the browser. The successor to the original Blazor app at [kicadtogcode.com](https://kicadtogcode.com) ([grserwe/KiCadToGCode](https://github.com/grserwe/KiCadToGCode)).
+**Live at [kicadtogcode.com](https://kicadtogcode.com)** — free, no sign-up, and your design never leaves your browser.
+
+Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on copper-clad board and drilling through-holes — entirely in the browser. This app replaced the original Blazor version ([grserwe/KiCadToGCode](https://github.com/grserwe/KiCadToGCode)) on the same domain.
 
 ## Features
 

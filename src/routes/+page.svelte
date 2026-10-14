@@ -174,15 +174,24 @@
 				<img src="/favicon.svg" alt="" class="h-8 w-8" />
 				<span class="text-lg font-bold tracking-tight text-slate-900">KiCad to GCode</span>
 			</a>
-			{#if boardSource}
+			<div class="flex items-center gap-2">
 				<button
 					type="button"
-					onclick={reset}
-					class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+					onclick={() => (feedbackOpen = true)}
+					class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
 				>
-					Start over
+					Send feedback
 				</button>
-			{/if}
+				{#if boardSource}
+					<button
+						type="button"
+						onclick={reset}
+						class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+					>
+						Start over
+					</button>
+				{/if}
+			</div>
 		</div>
 	</header>
 
