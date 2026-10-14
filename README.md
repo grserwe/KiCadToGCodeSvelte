@@ -51,8 +51,14 @@ npm run lint       # prettier + eslint
 npm run build      # production build (adapter-node)
 ```
 
+## Feedback form
+
+"Send feedback" in the footer (and "Report a problem" next to the output) opens a dialog that emails the message to the developer. The user's PCB file is attached by default — they can untick it — and they may add screenshots or other files. The current settings and any warnings on screen go into the email body. `POST /api/feedback` receives the form and sends it with nodemailer over SMTP, rate-limited per client and guarded by a honeypot field; without SMTP credentials it logs the message in dev and answers 503 in production.
+
+Configure with `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (optionally `SMTP_PORT`, default 465), `EMAIL_FROM` and `FEEDBACK_TO` — see `.env.example`. Production uses Resend's SMTP relay with a sender on the verified `kicadtogcode.com` domain. The Dockerfile raises adapter-node's `BODY_SIZE_LIMIT` to 25 MB so attachments fit.
+
 ## Architecture
 
-- **SvelteKit + TypeScript + Tailwind 4**, `adapter-node`, no database, no auth.
+- **SvelteKit + TypeScript + Tailwind 4**, `adapter-node`, no database, no auth. The only server code is `src/routes/api/feedback/` and `src/lib/server/email.ts`.
 - The conversion engine is a pure, framework-free TS library in `src/lib/engine/` (`sexpr/` tokenizer → `parser/` → `model/` → `geometry/` → `toolpath/` → `gcode/`, plus `silkscreen/` for the laser SVG), runnable in the browser worker and in vitest.
 - Deployed on [Fly.io](https://fly.io) via GitHub Actions (`.github/workflows/deploy.yml`): checks on every push/PR, deploy on master.

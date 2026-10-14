@@ -6,6 +6,7 @@
 	import BoardPreview from '$lib/components/BoardPreview.svelte';
 	import GCodeViewer from '$lib/components/GCodeViewer.svelte';
 	import DownloadPanel from '$lib/components/DownloadPanel.svelte';
+	import FeedbackDialog from '$lib/components/FeedbackDialog.svelte';
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import type { GCodeFile } from '$lib/engine/gcode/emit';
 	import { defaultSettings, effectiveToolDiameterMm } from '$lib/engine/gcode/settings';
@@ -32,6 +33,7 @@
 	let viewedFileName = $state<string | null>(null);
 	let settings = $state(browser ? loadSettings() : defaultSettings());
 	let zipCandidates = $state<PcbCandidate[] | null>(null);
+	let feedbackOpen = $state(false);
 
 	// Persist settings whenever they change, and regenerate the current board.
 	// Only `settings` may be tracked here: `convert()` reassigns `boardSource`, so
@@ -275,6 +277,16 @@
 				<section class="mx-auto max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6">
 					<h2 class="font-bold text-red-800">Could not process this board</h2>
 					<p class="mt-2 text-sm text-red-700">{error}</p>
+					<p class="mt-2 text-sm text-red-700">
+						Think the board should have worked?
+						<button
+							type="button"
+							onclick={() => (feedbackOpen = true)}
+							class="font-semibold underline hover:text-red-900"
+						>
+							Report this problem
+						</button>
+					</p>
 					<div class="mt-4">
 						<FileDrop onfile={loadFile} onsample={loadSample} compact />
 					</div>
@@ -369,6 +381,16 @@
 								</ul>
 							</div>
 						{/if}
+						<p class="mt-4 text-sm text-slate-500">
+							Output not what you expected?
+							<button
+								type="button"
+								onclick={() => (feedbackOpen = true)}
+								class="font-semibold text-amber-700 underline hover:text-amber-900"
+							>
+								Report a problem
+							</button>
+						</p>
 					</section>
 
 					<aside class="space-y-6">
@@ -407,9 +429,18 @@
 			rel="noopener"
 			class="underline hover:text-slate-600">Source on GitHub</a
 		>
-		<a
-			href="mailto:KiCadToGCode@outlook.com?subject=KiCadToGCode%20feedback"
-			class="underline hover:text-slate-600">Send feedback</a
+		<button
+			type="button"
+			onclick={() => (feedbackOpen = true)}
+			class="underline hover:text-slate-600">Send feedback</button
 		>
 	</footer>
 </div>
+
+<FeedbackDialog
+	bind:open={feedbackOpen}
+	board={boardSource}
+	{settings}
+	warnings={result?.warnings.map((warning) => warning.message) ?? []}
+	{error}
+/>

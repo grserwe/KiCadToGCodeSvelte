@@ -152,7 +152,7 @@ test('a zipped project extracts its board file', async ({ page }) => {
 		return [...local, ...central, ...end];
 	});
 
-	await page.locator('input[type=file]').setInputFiles({
+	await page.locator('input[type=file][accept]').setInputFiles({
 		name: 'project.zip',
 		mimeType: 'application/zip',
 		buffer: Buffer.from(zipBuffer)
@@ -163,10 +163,99 @@ test('a zipped project extracts its board file', async ({ page }) => {
 
 test('a broken file shows a friendly error and a retry path', async ({ page }) => {
 	await gotoHydrated(page);
-	await page.locator('input[type=file]').setInputFiles({
+	await page.locator('input[type=file][accept]').setInputFiles({
 		name: 'broken.kicad_pcb',
 		mimeType: 'text/plain',
 		buffer: Buffer.from('this is not a kicad file')
 	});
 	await expect(page.getByText(/could not process this board/i)).toBeVisible({ timeout: 20_000 });
+});
+
+/**
+ * What the dialog actually posted. Playwright cannot read a multipart body
+ * that carries file parts, so the test wraps fetch inside the page and
+ * records the FormData fields it cares about.
+ */
+interface CapturedFeedback {
+	message: string | null;
+	boardName: string | null;
+	pcbName: string | null;
+	pcbBytes: number;
+	settings: string | null;
+}
+
+async function captureFeedback(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		const original = window.fetch;
+		window.fetch = async (input, init) => {
+			if (init?.body instanceof FormData) {
+				const form = init.body;
+				const pcb = form.get('pcb');
+				(window as unknown as { __feedback: CapturedFeedback }).__feedback = {
+					message: form.get('message') as string | null,
+					boardName: form.get('boardName') as string | null,
+					pcbName: pcb instanceof File ? pcb.name : null,
+					pcbBytes: pcb instanceof File ? pcb.size : 0,
+					settings: form.get('settings') as string | null
+				};
+			}
+			return original(input, init);
+		};
+	});
+}
+
+function capturedFeedback(page: Page): Promise<CapturedFeedback> {
+	return page.evaluate(() => (window as unknown as { __feedback: CapturedFeedback }).__feedback);
+}
+
+test('feedback dialog emails the message with the PCB attached by default', async ({ page }) => {
+	await gotoHydrated(page);
+	await page.getByRole('button', { name: /try the sample board/i }).click();
+	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+
+	await page.getByRole('button', { name: /report a problem/i }).click();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog.getByRole('heading', { name: /report a problem/i })).toBeVisible();
+	const includePcb = dialog.getByRole('checkbox', { name: /include my pcb file/i });
+	await expect(includePcb).toBeChecked();
+	await expect(dialog.getByText('SampleBoard.kicad_pcb')).toBeVisible();
+
+	// Nothing can be sent until there is a message.
+	const send = dialog.getByRole('button', { name: 'Send', exact: true });
+	await expect(send).toBeDisabled();
+	await dialog.getByLabel('Message').fill('The drill file skips the registration holes.');
+	await dialog.getByLabel(/your email/i).fill('maker@example.com');
+
+	// Without SMTP configured the dev server logs the report and reports
+	// success; the request itself must still carry the board as a file part.
+	await captureFeedback(page);
+	await send.click();
+	await expect(dialog.getByText(/message sent/i)).toBeVisible({ timeout: 10_000 });
+	const sent = await capturedFeedback(page);
+	expect(sent.message).toBe('The drill file skips the registration holes.');
+	expect(sent.boardName).toBe('SampleBoard');
+	expect(sent.pcbName).toBe('SampleBoard.kicad_pcb');
+	expect(sent.pcbBytes).toBeGreaterThan(1000);
+	expect(sent.settings).toContain('"toolDiameterMm"');
+
+	await dialog.getByRole('button', { name: 'Close' }).click();
+	await expect(dialog).toBeHidden();
+});
+
+test('unticking the PCB checkbox keeps the design out of the report', async ({ page }) => {
+	await gotoHydrated(page);
+	await page.getByRole('button', { name: /try the sample board/i }).click();
+	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+
+	await page.getByRole('button', { name: /send feedback/i }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('checkbox', { name: /include my pcb file/i }).uncheck();
+	await dialog.getByLabel('Message').fill('Just saying thanks.');
+
+	await captureFeedback(page);
+	await dialog.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(dialog.getByText(/message sent/i)).toBeVisible({ timeout: 10_000 });
+	const sent = await capturedFeedback(page);
+	expect(sent.pcbName).toBeNull();
+	expect(sent.boardName).toBe('SampleBoard');
 });

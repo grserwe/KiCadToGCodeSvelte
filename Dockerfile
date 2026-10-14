@@ -15,6 +15,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOST=0.0.0.0
+# Feedback reports may carry the user's PCB file and screenshots; adapter-node's
+# default request limit is 512 KB. Keep this above FEEDBACK_LIMITS.maxTotalBytes
+# (20 MB) plus multipart overhead.
+ENV BODY_SIZE_LIMIT=25M
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules

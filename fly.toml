@@ -2,6 +2,12 @@
 #
 # Secrets (set with `fly secrets set KEY=value`):
 #   ORIGIN (set at domain cutover, e.g. https://kicadtogcode.com)
+#   SMTP_HOST, SMTP_USER, SMTP_PASS — outbound mail for the feedback form
+#     (Resend: smtp.resend.com / resend / <API key>)
+#   EMAIL_FROM — sender on a domain verified with the SMTP provider
+#   FEEDBACK_TO — where reports land (defaults to KiCadToGCode@outlook.com)
+# Until SMTP_* are set, the feedback form answers 503 and points users at the
+# FEEDBACK_TO address instead.
 
 app = 'kicadtogcode'
 primary_region = 'iad'
