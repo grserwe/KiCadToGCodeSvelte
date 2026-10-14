@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { BoardScene } from '$lib/preview/scene';
 	import { drillDiameters } from '$lib/preview/scene';
+	import { PanZoom } from '$lib/preview/panZoom.svelte';
 
 	let {
 		scene,
@@ -21,14 +22,14 @@
 		h: scene.height + 4
 	});
 
-	let view = $state({ x: 0, y: 0, w: 0, h: 0 });
+	const panZoom = new PanZoom();
 	let initializedFor = $state('');
 
 	$effect(() => {
 		const key = `${scene.width}x${scene.height}x${margin}`;
 		if (initializedFor !== key) {
 			initializedFor = key;
-			view = { ...fullView };
+			panZoom.reset(fullView, scene.width / 50, fullView.w * 4);
 		}
 	});
 
@@ -36,62 +37,21 @@
 	const drillColor = (diameter: number) =>
 		DRILL_COLORS[diameters.indexOf(diameter) % DRILL_COLORS.length];
 
-	let svgElement: SVGSVGElement;
-	let panning = $state(false);
-	let panStart = { x: 0, y: 0, viewX: 0, viewY: 0 };
-
-	function svgPoint(event: PointerEvent | WheelEvent): { x: number; y: number } {
-		const rect = svgElement.getBoundingClientRect();
-		return {
-			x: view.x + ((event.clientX - rect.left) / rect.width) * view.w,
-			y: view.y + ((event.clientY - rect.top) / rect.height) * view.h
-		};
-	}
-
-	function handleWheel(event: WheelEvent) {
-		event.preventDefault();
-		const factor = event.deltaY > 0 ? 1.2 : 1 / 1.2;
-		const focus = svgPoint(event);
-		const newW = Math.min(Math.max(view.w * factor, scene.width / 50), fullView.w * 4);
-		const scaleChange = newW / view.w;
-		view = {
-			x: focus.x - (focus.x - view.x) * scaleChange,
-			y: focus.y - (focus.y - view.y) * scaleChange,
-			w: newW,
-			h: view.h * scaleChange
-		};
-	}
-
-	function handlePointerDown(event: PointerEvent) {
-		panning = true;
-		panStart = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
-		svgElement.setPointerCapture(event.pointerId);
-	}
-
-	function handlePointerMove(event: PointerEvent) {
-		if (!panning) return;
-		const rect = svgElement.getBoundingClientRect();
-		view.x = panStart.viewX - ((event.clientX - panStart.x) / rect.width) * view.w;
-		view.y = panStart.viewY + ((event.clientY - panStart.y) / rect.height) * view.h;
-	}
-
-	function fit() {
-		view = { ...fullView };
-	}
+	const attach = (element: SVGSVGElement) => panZoom.attach(element);
 </script>
 
 <div class="relative">
 	<svg
-		bind:this={svgElement}
-		viewBox="{view.x} {-(view.y + view.h)} {view.w} {view.h}"
-		class="h-full max-h-[60vh] min-h-64 w-full touch-none rounded-xl border border-slate-200 bg-amber-50/60 {panning
+		use:attach
+		viewBox={panZoom.viewBox}
+		class="h-full max-h-[60vh] min-h-64 w-full touch-none rounded-xl border border-slate-200 bg-amber-50/60 {panZoom.panning
 			? 'cursor-grabbing'
 			: 'cursor-grab'}"
 		preserveAspectRatio="xMidYMid meet"
-		onwheel={handleWheel}
-		onpointerdown={handlePointerDown}
-		onpointermove={handlePointerMove}
-		onpointerup={() => (panning = false)}
+		onwheel={panZoom.onwheel}
+		onpointerdown={panZoom.onpointerdown}
+		onpointermove={panZoom.onpointermove}
+		onpointerup={panZoom.onpointerup}
 		role="img"
 		aria-label="Board preview"
 	>
@@ -178,7 +138,7 @@
 
 	<button
 		type="button"
-		onclick={fit}
+		onclick={() => panZoom.fit()}
 		class="absolute top-2 right-2 rounded-lg bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow hover:bg-white"
 	>
 		Fit board

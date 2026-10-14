@@ -55,6 +55,7 @@ export function generateGCode(
 			fileName: `${boardName}-${layer}-isolation${extension}`,
 			label: layer === 'top' ? 'Top isolation engraving' : 'Bottom isolation engraving (mirrored)',
 			kind: layer === 'top' ? 'isolation-top' : 'isolation-bottom',
+			machining: { facing: layer, sideMirror: layer === 'bottom' && settings.mirrorBottom },
 			content: lines.join('\n') + '\n'
 		});
 	}
@@ -312,6 +313,7 @@ function drillFiles(
 			label: `Drill ${diameter} mm holes (${holes.length})`,
 			kind: 'drill' as const,
 			drillDiameterMm: diameter,
+			machining: { facing: settings.drillSide, sideMirror },
 			content: lines.join('\n') + '\n'
 		};
 	});
@@ -380,6 +382,7 @@ function registrationFile(
 		label: `Registration holes ${settings.registrationHoles.diameterMm} mm — run first`,
 		kind: 'registration',
 		drillDiameterMm: settings.registrationHoles.diameterMm,
+		machining: { facing: 'top', sideMirror: false },
 		content: lines.join('\n') + '\n'
 	};
 }

@@ -4,15 +4,20 @@
 	import FileDrop from '$lib/components/FileDrop.svelte';
 	import Stepper from '$lib/components/Stepper.svelte';
 	import BoardPreview from '$lib/components/BoardPreview.svelte';
+	import GCodeViewer from '$lib/components/GCodeViewer.svelte';
 	import DownloadPanel from '$lib/components/DownloadPanel.svelte';
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
-	import { defaultSettings } from '$lib/engine/gcode/settings';
+	import type { GCodeFile } from '$lib/engine/gcode/emit';
+	import { defaultSettings, effectiveToolDiameterMm } from '$lib/engine/gcode/settings';
+	import { createOutputTransform } from '$lib/engine/gcode/transforms';
 	import type { LayerId } from '$lib/engine/model/types';
+	import { convertLength } from '$lib/engine/model/units';
 	import {
 		boardNameFromPath,
 		extractPcbFromZip,
 		type PcbCandidate
 	} from '$lib/engine/zip/extractPcb';
+	import { interpretGCode } from '$lib/preview/gcode';
 	import { buildScene } from '$lib/preview/scene';
 	import { loadSettings, saveSettings, clearSettings } from '$lib/settings/storage';
 	import { convertBoard, type ConversionResult } from '$lib/worker/engineClient';
@@ -23,6 +28,8 @@
 	let error = $state('');
 	let side = $state<LayerId>('top');
 	let viewMode = $state<'designed' | 'machined'>('designed');
+	let previewMode = $state<'design' | 'gcode'>('design');
+	let viewedFileName = $state<string | null>(null);
 	let settings = $state(browser ? loadSettings() : defaultSettings());
 	let zipCandidates = $state<PcbCandidate[] | null>(null);
 
@@ -56,6 +63,50 @@
 	const showMirrored = $derived(
 		side === 'bottom' && viewMode === 'machined' && settings.mirrorBottom
 	);
+
+	// GCode viewer: replay the selected program and draw the designed copper
+	// under it, mapped through the same transform the emitter used.
+	const gcodeFiles = $derived(
+		result ? result.files.filter((file) => !file.kind.startsWith('silkscreen')) : []
+	);
+	const viewedFile = $derived(
+		gcodeFiles.find((file) => file.fileName === viewedFileName) ??
+			gcodeFiles.find((file) => file.kind === 'isolation-top') ??
+			gcodeFiles[0] ??
+			null
+	);
+	const program = $derived(viewedFile ? interpretGCode(viewedFile.content) : null);
+	const ghost = $derived.by(() => {
+		if (!result || !viewedFile?.machining) return null;
+		const { facing, sideMirror } = viewedFile.machining;
+		const transform = createOutputTransform(
+			settings,
+			result.board.width,
+			result.board.height,
+			sideMirror
+		);
+		const origin = transform.point({ x: 0, y: 0 });
+		const unitX = transform.point({ x: 1, y: 0 });
+		const unitY = transform.point({ x: 0, y: 1 });
+		return {
+			scene: buildScene(result.board, facing, settings),
+			transform: { a: unitX.x - origin.x, d: unitY.y - origin.y, e: origin.x, f: origin.y }
+		};
+	});
+	const viewedToolDiameter = $derived(
+		viewedFile
+			? convertLength(
+					viewedFile.drillDiameterMm ?? effectiveToolDiameterMm(settings),
+					'mm',
+					settings.outputUnits
+				)
+			: 0
+	);
+
+	function viewFile(file: GCodeFile) {
+		viewedFileName = file.fileName;
+		previewMode = 'gcode';
+	}
 
 	async function loadFile(file: File) {
 		zipCandidates = null;
@@ -104,6 +155,8 @@
 		result = null;
 		error = '';
 		side = 'top';
+		previewMode = 'design';
+		viewedFileName = null;
 		zipCandidates = null;
 	}
 </script>
@@ -230,40 +283,82 @@
 				<div class="grid gap-6 lg:grid-cols-[1fr_minmax(280px,360px)]">
 					<section>
 						<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-							<div class="flex rounded-lg border border-slate-300 bg-white p-0.5" role="tablist">
-								{#each [{ id: 'top', label: 'Top side' }, { id: 'bottom', label: 'Bottom side' }] as tab (tab.id)}
-									<button
-										type="button"
-										role="tab"
-										aria-selected={side === tab.id}
-										onclick={() => (side = tab.id as LayerId)}
-										class="rounded-md px-4 py-1.5 text-sm font-semibold transition-colors
-											{side === tab.id ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'}"
+							<div class="flex flex-wrap items-center gap-3">
+								<div class="flex rounded-lg border border-slate-300 bg-white p-0.5" role="tablist">
+									{#each [{ id: 'design', label: 'Design' }, { id: 'gcode', label: 'GCode' }] as tab (tab.id)}
+										<button
+											type="button"
+											role="tab"
+											aria-selected={previewMode === tab.id}
+											onclick={() => (previewMode = tab.id as 'design' | 'gcode')}
+											class="rounded-md px-3 py-1.5 text-sm font-semibold transition-colors
+												{previewMode === tab.id ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}"
+										>
+											{tab.label}
+										</button>
+									{/each}
+								</div>
+								{#if previewMode === 'design'}
+									<div
+										class="flex rounded-lg border border-slate-300 bg-white p-0.5"
+										role="tablist"
 									>
-										{tab.label}
-									</button>
-								{/each}
-							</div>
-							{#if side === 'bottom' && settings.mirrorBottom}
-								<label class="flex items-center gap-2 text-sm text-slate-600">
-									<input
-										type="checkbox"
-										class="rounded"
-										checked={viewMode === 'machined'}
+										{#each [{ id: 'top', label: 'Top side' }, { id: 'bottom', label: 'Bottom side' }] as tab (tab.id)}
+											<button
+												type="button"
+												role="tab"
+												aria-selected={side === tab.id}
+												onclick={() => (side = tab.id as LayerId)}
+												class="rounded-md px-4 py-1.5 text-sm font-semibold transition-colors
+													{side === tab.id ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'}"
+											>
+												{tab.label}
+											</button>
+										{/each}
+									</div>
+									{#if side === 'bottom' && settings.mirrorBottom}
+										<label class="flex items-center gap-2 text-sm text-slate-600">
+											<input
+												type="checkbox"
+												class="rounded"
+												checked={viewMode === 'machined'}
+												onchange={(event) =>
+													(viewMode = (event.target as HTMLInputElement).checked
+														? 'machined'
+														: 'designed')}
+											/>
+											Show as machined (mirrored)
+										</label>
+									{/if}
+								{:else}
+									<select
+										class="rounded-lg border-slate-300 py-1.5 pr-8 pl-3 font-mono text-sm"
+										value={viewedFile?.fileName ?? ''}
 										onchange={(event) =>
-											(viewMode = (event.target as HTMLInputElement).checked
-												? 'machined'
-												: 'designed')}
-									/>
-									Show as machined (mirrored)
-								</label>
-							{/if}
+											(viewedFileName = (event.target as HTMLSelectElement).value)}
+										aria-label="GCode file to view"
+									>
+										{#each gcodeFiles as file (file.fileName)}
+											<option value={file.fileName}>{file.fileName}</option>
+										{/each}
+									</select>
+								{/if}
+							</div>
 							<p class="text-sm text-slate-500">
 								{boardSource.name} — {scene.width.toFixed(1)} × {scene.height.toFixed(1)} mm
 								{#if converting}<span class="text-amber-700">· updating…</span>{/if}
 							</p>
 						</div>
-						<BoardPreview {scene} mirrored={showMirrored} />
+						{#if previewMode === 'gcode' && program}
+							<GCodeViewer
+								{program}
+								units={settings.outputUnits}
+								toolDiameter={viewedToolDiameter}
+								{ghost}
+							/>
+						{:else}
+							<BoardPreview {scene} mirrored={showMirrored} />
+						{/if}
 						{#if result.warnings.length}
 							<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
 								<h3 class="text-sm font-bold text-amber-900">Heads up</h3>
@@ -277,7 +372,7 @@
 					</section>
 
 					<aside class="space-y-6">
-						<DownloadPanel files={result.files} boardName={boardSource.name} />
+						<DownloadPanel files={result.files} boardName={boardSource.name} onview={viewFile} />
 						<SettingsPanel bind:settings onreset={resetSettings} />
 						<section
 							class="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"

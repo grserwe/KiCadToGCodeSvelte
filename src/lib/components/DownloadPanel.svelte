@@ -2,7 +2,18 @@
 	import { zipSync, strToU8 } from 'fflate';
 	import type { GCodeFile } from '$lib/engine/gcode/emit';
 
-	let { files, boardName }: { files: GCodeFile[]; boardName: string } = $props();
+	let {
+		files,
+		boardName,
+		onview
+	}: {
+		files: GCodeFile[];
+		boardName: string;
+		/** Open a GCode program in the viewer; omitted when no viewer is available. */
+		onview?: (file: GCodeFile) => void;
+	} = $props();
+
+	const isGCode = (file: GCodeFile) => !file.kind.startsWith('silkscreen');
 
 	const ordered = $derived([...files].sort((a, b) => orderOf(a) - orderOf(b)));
 
@@ -68,13 +79,25 @@
 					<p class="truncate font-mono text-sm text-slate-800">{file.fileName}</p>
 					<p class="text-xs text-slate-500">{file.label}</p>
 				</div>
-				<button
-					type="button"
-					onclick={() => downloadFile(file)}
-					class="shrink-0 rounded-lg border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
-				>
-					Download
-				</button>
+				<div class="flex shrink-0 gap-1">
+					{#if onview && isGCode(file)}
+						<button
+							type="button"
+							onclick={() => onview(file)}
+							title="Show what this GCode will do"
+							class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+						>
+							View
+						</button>
+					{/if}
+					<button
+						type="button"
+						onclick={() => downloadFile(file)}
+						class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+					>
+						Download
+					</button>
+				</div>
 			</li>
 		{/each}
 	</ul>

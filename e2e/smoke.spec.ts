@@ -35,6 +35,19 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 	await page.getByRole('tab', { name: /bottom side/i }).click();
 	await expect(page.getByText(/show as machined/i)).toBeVisible();
 
+	// The GCode viewer replays the drill program and finds nothing wrong.
+	await page
+		.locator('li', { hasText: 'SampleBoard-drill-0.5mm.txt' })
+		.getByRole('button', { name: 'View' })
+		.click();
+	const viewer = page.getByRole('img', { name: 'GCode toolpath preview' });
+	await expect(viewer).toBeVisible();
+	expect(await viewer.locator('circle').count()).toBeGreaterThan(4); // plunge markers + origin
+	await expect(page.getByText(/\d+ \/ \d+ moves/)).toBeVisible();
+	await expect(page.getByText(/no problems found/i)).toBeVisible();
+	await page.getByRole('tab', { name: 'Design' }).click();
+	await expect(preview).toBeVisible();
+
 	// A single-file download produces the expected file.
 	const downloadPromise = page.waitForEvent('download');
 	await page
