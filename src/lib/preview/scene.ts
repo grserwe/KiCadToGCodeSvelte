@@ -1,9 +1,11 @@
-import type { BoardModel, Graphic, LayerId } from '../engine/model/types';
+import type { BoardModel, LayerId } from '../engine/model/types';
 import { buildPadOutline, type OutlineEdge } from '../engine/geometry/outline';
 import { buildLayerToolpath } from '../engine/toolpath/assemble';
 import { effectiveToolDiameterMm, type GCodeSettings } from '../engine/gcode/settings';
 import { segmentToSvgPath } from './svgPath';
 import { graphicToSvgPath } from '../engine/silkscreen/svgPath';
+import { renderText, strokesToSvgPaths } from '../engine/silkscreen/text';
+import { selectLaserTargets } from '../engine/silkscreen/targets';
 
 export interface SceneTrack {
 	x1: number;
@@ -24,6 +26,13 @@ export interface SceneGraphic {
 	d: string;
 	width: number;
 	filled: boolean;
+}
+
+/** A Print and Cut target: index 0 draws one ring, index 1 two. */
+export interface SceneTarget {
+	cx: number;
+	cy: number;
+	index: number;
 }
 
 export interface SceneDrill {
@@ -47,6 +56,8 @@ export interface BoardScene {
 	silkscreen: SceneGraphic[];
 	/** Edge.Cuts board outline, when the file has one. */
 	outline: string[];
+	/** Laser alignment targets (when the silkscreen SVG is enabled). */
+	laserTargets: SceneTarget[];
 }
 
 /** Build the renderable scene for one side directly from the geometry model. */
@@ -108,17 +119,31 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 	}).segments.map(segmentToSvgPath);
 
 	const silkLayer = layer === 'top' ? 'silk-top' : 'silk-bottom';
-	const silkscreen: SceneGraphic[] = board.graphics
-		.filter(
-			(graphic): graphic is Exclude<Graphic, { kind: 'text' }> =>
-				graphic.layer === silkLayer && graphic.kind !== 'text'
-		)
-		.map((graphic) => ({
-			d: graphicToSvgPath(graphic),
+	const silkscreen: SceneGraphic[] = [];
+	for (const graphic of board.graphics) {
+		if (graphic.layer !== silkLayer) continue;
+		if (graphic.kind === 'text') {
+			for (const d of strokesToSvgPaths(renderText(graphic).strokes, (p) => p)) {
+				silkscreen.push({ d, width: graphic.thickness, filled: false });
+			}
+			continue;
+		}
+		const d = graphicToSvgPath(graphic);
+		if (!d) continue;
+		silkscreen.push({
+			d,
 			width: graphic.width,
 			filled: (graphic.kind === 'circle' || graphic.kind === 'polygon') && graphic.filled
-		}))
-		.filter((graphic) => graphic.d !== '');
+		});
+	}
+
+	const laserTargets: SceneTarget[] = settings.silkscreen.enabled
+		? selectLaserTargets(board, settings).map((target, index) => ({
+				cx: target.position.x,
+				cy: target.position.y,
+				index
+			}))
+		: [];
 
 	const outline = board.graphics
 		.filter((graphic) => graphic.layer === 'edge')
@@ -134,7 +159,8 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 		registration,
 		toolpath,
 		silkscreen,
-		outline
+		outline,
+		laserTargets
 	};
 }
 

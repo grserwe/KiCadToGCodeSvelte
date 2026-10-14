@@ -96,10 +96,15 @@ export interface EngineWarning {
 /** Non-copper drawing layers the engine keeps: silkscreen and the board edge. */
 export type GraphicLayer = 'silk-top' | 'silk-bottom' | 'edge';
 
+export interface TextJustify {
+	horizontal: 'left' | 'center' | 'right';
+	vertical: 'top' | 'center' | 'bottom';
+}
+
 /**
  * A drawing primitive from a silkscreen or Edge.Cuts layer, in board-local
  * Y-up coordinates. Widths are stroke widths in mm. Arc sweeps are
- * CCW-positive. Text is parsed but not rendered yet (no stroke font).
+ * CCW-positive. Text is laid out with KiCad's stroke font when rendered.
  */
 export type Graphic =
 	| { kind: 'line'; layer: GraphicLayer; start: Vec2; end: Vec2; width: number }
@@ -126,14 +131,20 @@ export type Graphic =
 	| {
 			kind: 'text';
 			layer: GraphicLayer;
+			/** Lines separated by '\n'; ${REFERENCE}/${VALUE} already substituted. */
 			text: string;
+			/** Anchor point the justification is relative to. */
 			position: Vec2;
-			/** Degrees, CCW-positive. */
+			/** Degrees, CCW-positive (absolute, not relative to the footprint). */
 			rotationDeg: number;
-			/** Glyph height in mm. */
-			height: number;
+			/** Glyph width (x) and height (y) in mm — KiCad's `(size height width)`. */
+			size: Vec2;
 			/** Stroke thickness in mm. */
 			thickness: number;
+			justify: TextJustify;
+			/** Mirrored about the anchor (back-side text). */
+			mirrored: boolean;
+			italic: boolean;
 	  };
 
 export interface BoardModel {

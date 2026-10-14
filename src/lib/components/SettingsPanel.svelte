@@ -329,10 +329,11 @@
 			<input type="checkbox" class="rounded" bind:checked={settings.silkscreen.enabled} />
 		</label>
 		<p class="py-1 text-xs text-slate-400">
-			An SVG of the silkscreen drawings, sized in mm, ready to import into LightBurn and burn onto
-			the board. Silk lines are black (cut as Line), filled shapes blue (Fill), and the board
-			outline plus registration holes red — use that layer to line up with the milled board, then
-			turn its output off. Text (reference designators) isn't included yet.
+			An SVG of the silkscreen drawings and text, sized in mm, ready to import into LightBurn and
+			burn onto the board. Silk is black (cut as Line), filled shapes blue (Fill), the board outline
+			and registration holes red (reference only), and two green Print and Cut targets sit on
+			drilled holes: in LightBurn use Laser Tools → Print and Cut, jog the laser to each target's
+			hole, then Align Output to Targets. Set the red and green layers to no output.
 		</p>
 		<p class="py-1 text-xs text-slate-400">
 			Lasering FR4 releases epoxy and flame-retardant fumes: use extraction. A white marking spray

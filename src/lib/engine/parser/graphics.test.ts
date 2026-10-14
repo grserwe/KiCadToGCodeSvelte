@@ -161,8 +161,10 @@ describe('silkscreen graphics — primitives', () => {
 		if (reference.kind !== 'text') throw new Error('expected text');
 		expect(reference.position.x).toBeCloseTo(10, 6);
 		expect(reference.position.y).toBeCloseTo(7, 6);
-		expect(reference.height).toBeCloseTo(1, 6);
+		expect(reference.size).toEqual({ x: 1, y: 1 });
 		expect(reference.thickness).toBeCloseTo(0.15, 6);
+		expect(reference.justify).toEqual({ horizontal: 'center', vertical: 'center' });
+		expect(reference.mirrored).toBe(false);
 	});
 
 	it('ignores custom-pad primitives, which have no layer of their own', () => {

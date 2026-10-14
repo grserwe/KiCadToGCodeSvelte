@@ -133,6 +133,19 @@
 					stroke-dasharray="0.3 0.2"
 				/>
 			{/each}
+
+			{#each scene.laserTargets as target (target.index)}
+				<g stroke="#16a34a" stroke-width="0.1" fill="none">
+					<circle cx={target.cx} cy={target.cy} r="1.25" />
+					{#if target.index === 1}
+						<circle cx={target.cx} cy={target.cy} r="1.75" />
+					{/if}
+					<line x1={target.cx + 0.5} y1={target.cy} x2={target.cx + 2} y2={target.cy} />
+					<line x1={target.cx - 0.5} y1={target.cy} x2={target.cx - 2} y2={target.cy} />
+					<line x1={target.cx} y1={target.cy + 0.5} x2={target.cx} y2={target.cy + 2} />
+					<line x1={target.cx} y1={target.cy - 0.5} x2={target.cx} y2={target.cy - 2} />
+				</g>
+			{/each}
 		</g>
 	</svg>
 
@@ -171,6 +184,12 @@
 			<span class="flex items-center gap-1">
 				<span class="inline-block h-3 w-3 rounded-full border-2 border-dashed border-red-600"
 				></span> Registration
+			</span>
+		{/if}
+		{#if scene.laserTargets.length}
+			<span class="flex items-center gap-1">
+				<span class="inline-block h-3 w-3 rounded-full border-2 border-green-600"></span> Laser targets
+				1 &amp; 2
 			</span>
 		{/if}
 	</div>

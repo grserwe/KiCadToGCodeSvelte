@@ -7,6 +7,7 @@ import {
 	ALIGNMENT_COLOR,
 	SILK_FILL_COLOR,
 	SILK_STROKE_COLOR,
+	TARGET_COLOR,
 	generateSilkscreenFiles
 } from './svg';
 import { graphicToSvgPath } from './svgPath';
@@ -43,9 +44,26 @@ describe('generateSilkscreenFiles', () => {
 	});
 
 	it('draws the 16 silk lines as black centreline strokes with their widths', () => {
-		expect(countOf(svg, `stroke="${SILK_STROKE_COLOR}"`)).toBe(16);
 		expect(countOf(svg, 'stroke-width="0.12"')).toBe(16);
 		expect(svg).not.toContain(SILK_FILL_COLOR);
+	});
+
+	it('draws the reference designators J1 and J2 as stroke-font text', () => {
+		// J (1 stroke) + 1 (2 strokes) + J + 2 (1 stroke) = 5 text strokes at the 0.15 thickness.
+		expect(countOf(svg, 'stroke-width="0.15"')).toBe(5);
+		expect(countOf(svg, `stroke="${SILK_STROKE_COLOR}"`)).toBe(16 + 5);
+	});
+
+	it('adds two Print and Cut targets on the two drilled holes farthest apart', () => {
+		expect(svg).toContain('<g id="target-1">');
+		expect(svg).toContain('<g id="target-2">');
+		// Target 1: ring + 4 cross arms; target 2: two rings + 4 arms.
+		expect(countOf(svg, `stroke="${TARGET_COLOR}"`)).toBe(5 + 6);
+		// Pads drill 0.5 mm at model (3.635, 4.445)/(3.635, 3.445) and (18.415, …):
+		// the first target is the left-most of the diagonal pair.
+		// Ring around the left-most hole of the diagonal pair (model x = 3.635,
+		// y = 4.445 or 3.445): east point at x = 3.635 + 1.25 + 6.5875 margin.
+		expect(svg).toMatch(/M 11\.4725 (3\.81|4\.81) A 1\.25 1\.25 0 1 0 8\.9725 /);
 	});
 
 	it('adds the outline and both registration holes in the alignment colour', () => {
@@ -61,10 +79,35 @@ describe('generateSilkscreenFiles', () => {
 		expect(svg).toContain('M 24.3075 3.125 L 25.0025 3.125');
 	});
 
-	it('warns that reference designators were left out', () => {
-		expect(warnings).toHaveLength(1);
-		expect(warnings[0].code).toBe('silkscreen-text');
-		expect(warnings[0].message).toContain('2 text items on the top silkscreen');
+	it('has nothing to warn about when every character is in the font', () => {
+		expect(warnings).toEqual([]);
+	});
+
+	it('warns about characters outside the ASCII font', () => {
+		const result = generateSilkscreenFiles(
+			{
+				...board,
+				graphics: [
+					{
+						kind: 'text',
+						layer: 'silk-top',
+						text: '10µF',
+						position: { x: 5, y: 5 },
+						rotationDeg: 0,
+						size: { x: 1, y: 1 },
+						thickness: 0.15,
+						justify: { horizontal: 'center', vertical: 'center' },
+						mirrored: false,
+						italic: false
+					}
+				]
+			},
+			'Sample',
+			settingsWith()
+		);
+		expect(result.warnings).toHaveLength(1);
+		expect(result.warnings[0].code).toBe('silkscreen-text');
+		expect(result.warnings[0].message).toContain('1 character in the top silkscreen text is');
 	});
 
 	it('emits nothing when disabled', () => {
@@ -130,7 +173,6 @@ describe('generateSilkscreenFiles', () => {
 	it('is included in the full generation output', () => {
 		const result = generateGCode(board, 'Sample', settingsWith(), new Date());
 		expect(result.files.some((f) => f.kind === 'silkscreen-top')).toBe(true);
-		expect(result.warnings.some((w) => w.code === 'silkscreen-text')).toBe(true);
 	});
 });
 
@@ -200,8 +242,11 @@ describe('graphicToSvgPath', () => {
 				text: 'R1',
 				position: { x: 0, y: 0 },
 				rotationDeg: 0,
-				height: 1,
-				thickness: 0.15
+				size: { x: 1, y: 1 },
+				thickness: 0.15,
+				justify: { horizontal: 'center', vertical: 'center' },
+				mirrored: false,
+				italic: false
 			})
 		).toBe('');
 	});

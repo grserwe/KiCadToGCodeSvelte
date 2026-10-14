@@ -12,7 +12,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 - GCode viewer: replays each generated program the way a GRBL controller would, drawing cuts at the tool's real width, rapids, and plunges over the designed copper (mapped into machine coordinates), with a move-by-move step-through and checks for rapids with the tool down, inconsistent arcs, cutting with the spindle off, and missing feed rates or units
 - Configurable CNC settings (feeds, speeds, depths, origin, units), persisted in the browser
 - Clearance-aware minimum widths: thin traces and small pads are widened to your configured minimums (so copper doesn't peel during machining), capped automatically wherever copper on another net is too close — widening can never cause a short, and blocked spots are reported
-- Silkscreen SVG for laser marking: the top (and bottom) silkscreen drawings as a millimetre-sized SVG ready for LightBurn, with the board outline and registration holes on their own colour/layer so the burn lines up with the milled board
+- Silkscreen SVG for laser marking: the top (and bottom) silkscreen drawings and text as a millimetre-sized SVG ready for LightBurn, with Print and Cut alignment targets on two drilled holes, plus the board outline and registration holes on their own colour/layer
 - All processing client-side in a Web Worker — your design never leaves your machine
 - Recoverable problems surface as warnings (oval slot holes, copper zones, curved traces, inner layers) instead of failures
 
@@ -35,7 +35,6 @@ The bottom side is mirrored left-over-right (the face the laser sees), the same 
 
 ## Roadmap (not yet supported)
 
-- Silkscreen text (needs a stroke font)
 - Copper zones / filled pours
 - Curved (arc) traces
 - Board outline cut-out GCode

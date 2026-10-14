@@ -1,5 +1,5 @@
 import type { SExpr } from '../sexpr/types';
-import type { EngineWarning, GraphicLayer, Vec2 } from '../model/types';
+import type { EngineWarning, GraphicLayer, TextJustify, Vec2 } from '../model/types';
 import type { Dialect } from './dialect';
 import { findAllRecursive, findChild, numberAttr } from './sexprHelpers';
 import { rotateAbout } from '../geometry/arcs';
@@ -30,9 +30,15 @@ export type RawGraphic =
 			text: string;
 			position: Vec2;
 			rotationDeg: number;
-			height: number;
+			size: Vec2;
 			thickness: number;
+			justify: TextJustify;
+			mirrored: boolean;
+			italic: boolean;
 	  };
+
+/** Footprint fields substituted into `${REFERENCE}`-style text variables. */
+type TextVariables = Record<string, string>;
 
 /**
  * Silkscreen (F.SilkS / B.SilkS) and board-edge (Edge.Cuts) drawings: the
@@ -63,15 +69,16 @@ export function extractGraphics(
 			y: footprintY - local.x * sin + local.y * cos
 		});
 
+		const variables = footprintVariables(footprint);
 		for (const record of footprint.children) {
-			const graphic = parseRecord(record, place, footprintRotation, warnings);
+			const graphic = parseRecord(record, place, footprintRotation, variables, warnings);
 			if (graphic) graphics.push(graphic);
 		}
 	}
 
 	for (const record of root.children) {
 		if (!record.name.toLowerCase().startsWith('gr_')) continue;
-		const graphic = parseRecord(record, (p) => p, 0, warnings);
+		const graphic = parseRecord(record, (p) => p, 0, {}, warnings);
 		if (graphic) graphics.push(graphic);
 	}
 
@@ -88,10 +95,31 @@ function graphicLayer(record: SExpr): GraphicLayer | null {
 	return null;
 }
 
+/**
+ * The footprint's reference and value, for `${REFERENCE}` / `${VALUE}` in
+ * user text. Modern files keep them in `property` records, legacy files in
+ * `fp_text reference|value`.
+ */
+function footprintVariables(footprint: SExpr): TextVariables {
+	const variables: TextVariables = {};
+	for (const child of footprint.children) {
+		const name = child.name.toLowerCase();
+		if (name === 'property') {
+			const key = (child.attributes[0] ?? '').toUpperCase();
+			if (key === 'REFERENCE' || key === 'VALUE') variables[key] = child.attributes[1] ?? '';
+		} else if (name === 'fp_text') {
+			const kind = (child.attributes[0] ?? '').toUpperCase();
+			if (kind === 'REFERENCE' || kind === 'VALUE') variables[kind] = child.attributes[1] ?? '';
+		}
+	}
+	return variables;
+}
+
 function parseRecord(
 	record: SExpr,
 	place: (local: Vec2) => Vec2,
 	footprintRotation: number,
+	variables: TextVariables,
 	warnings: EngineWarning[]
 ): RawGraphic | null {
 	const name = record.name.toLowerCase();
@@ -184,7 +212,7 @@ function parseRecord(
 
 		case 'text':
 		case 'property':
-			return parseText(record, layer, place, footprintRotation);
+			return parseText(record, layer, place, footprintRotation, variables);
 
 		default:
 			return null;
@@ -251,7 +279,8 @@ function parseText(
 	record: SExpr,
 	layer: GraphicLayer,
 	place: (local: Vec2) => Vec2,
-	footprintRotation: number
+	footprintRotation: number,
+	variables: TextVariables
 ): RawGraphic | null {
 	const name = record.name.toLowerCase();
 	const isHidden =
@@ -269,6 +298,10 @@ function parseText(
 	} else {
 		text = record.attributes[1] ?? '';
 	}
+	text = text.replace(/\$\{([A-Za-z_]+)\}/g, (match, name: string) => {
+		const value = variables[name.toUpperCase()];
+		return value === undefined ? match : value;
+	});
 	if (text.trim() === '') return null;
 
 	const at = findChild(record, 'at');
@@ -276,21 +309,51 @@ function parseText(
 	const y = numberAttr(at, 1);
 	if (x === undefined || y === undefined) return null;
 
-	const font = findChild(findChild(record, 'effects') ?? record, 'font');
-	const size = font ? findChild(font, 'size') : undefined;
-	const height = numberAttr(size, 1) ?? numberAttr(size, 0) ?? 1;
+	const effects = findChild(record, 'effects') ?? record;
+	const font = findChild(effects, 'font');
+	const sizeRecord = font ? findChild(font, 'size') : undefined;
+	// KiCad writes `(size height width)`.
+	const height = numberAttr(sizeRecord, 0) ?? 1;
+	const width = numberAttr(sizeRecord, 1) ?? height;
 	const thickness = numberAttr(font ? findChild(font, 'thickness') : undefined, 0) ?? height * 0.15;
+
+	const justifyWords = (findChild(effects, 'justify')?.attributes ?? []).map((a) =>
+		a.toLowerCase()
+	);
+	const justify: TextJustify = {
+		horizontal: justifyWords.includes('left')
+			? 'left'
+			: justifyWords.includes('right')
+				? 'right'
+				: 'center',
+		vertical: justifyWords.includes('top')
+			? 'top'
+			: justifyWords.includes('bottom')
+				? 'bottom'
+				: 'center'
+	};
 
 	return {
 		kind: 'text',
 		layer,
 		text,
 		position: place({ x, y }),
-		// Like pads, KiCad stores a footprint text's TOTAL rotation.
-		rotationDeg: numberAttr(at, 2) ?? footprintRotation,
-		height,
-		thickness
+		// KiCad stores a footprint text's ABSOLUTE rotation (verified against
+		// kicad-cli for both the modern and the KiCad 4 file dialects).
+		rotationDeg: numberAttr(at, 2) ?? 0,
+		size: { x: width, y: height },
+		thickness,
+		justify,
+		mirrored: justifyWords.includes('mirror'),
+		italic: fontFlag(font, 'italic')
 	};
+}
+
+/** `(font … italic)` in older files, `(font … (italic yes))` in newer ones. */
+function fontFlag(font: SExpr | undefined, flag: string): boolean {
+	if (!font) return false;
+	if (font.attributes.some((a) => a.toLowerCase() === flag)) return true;
+	return (findChild(font, flag)?.attributes[0] ?? 'no').toLowerCase() === 'yes';
 }
 
 function lineWidth(record: SExpr): number {

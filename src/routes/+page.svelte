@@ -385,8 +385,8 @@
 								<li>Engrave the bottom side.</li>
 								{#if result.files.some((file) => file.kind.startsWith('silkscreen'))}
 									<li>
-										Laser the silkscreen SVG onto the component side, aligned on the registration
-										holes.
+										Laser the silkscreen SVG onto the component side, using LightBurn's Print and
+										Cut on the two green target holes.
 									</li>
 								{/if}
 							</ol>
