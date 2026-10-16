@@ -14,7 +14,9 @@
 
 	const DRILL_COLORS = ['#0f172a', '#1d4ed8', '#7c3aed', '#0e7490', '#be123c', '#4d7c0f'];
 
-	const margin = $derived(Math.max(scene.registration.length ? 10 : 2, 2));
+	const margin = $derived(
+		Math.max(scene.registration.length ? 10 : 2, 2, scene.profile.length ? 4 : 0)
+	);
 	const fullView = $derived({
 		x: -margin,
 		y: -2,
@@ -111,6 +113,24 @@
 				<path d={path} fill="none" stroke="#166534" stroke-width="0.07" />
 			{/each}
 
+			{#each scene.profile as loop, index (index)}
+				<path
+					d={loop.d}
+					fill="none"
+					stroke="#7c3aed"
+					stroke-opacity="0.25"
+					stroke-width={loop.toolDiameterMm}
+					stroke-linejoin="round"
+				/>
+				<path
+					d={loop.d}
+					fill="none"
+					stroke="#6d28d9"
+					stroke-width="0.1"
+					stroke-dasharray="0.6 0.3"
+				/>
+			{/each}
+
 			{#each scene.drills as drill, index (index)}
 				<circle
 					cx={drill.cx}
@@ -169,6 +189,11 @@
 		{#if scene.silkscreen.length}
 			<span class="flex items-center gap-1">
 				<span class="inline-block h-0.5 w-4 bg-slate-700"></span> Silkscreen
+			</span>
+		{/if}
+		{#if scene.profile.length}
+			<span class="flex items-center gap-1">
+				<span class="inline-block h-px w-4 border-t-2 border-dashed border-violet-700"></span> Cutout
 			</span>
 		{/if}
 		{#each diameters as diameter (diameter)}

@@ -177,6 +177,9 @@
 							<path d={pad.path} fill="#f59e0b" />
 						{/if}
 					{/each}
+					{#each ghost.scene.outline as path, index (index)}
+						<path d={path} fill="none" stroke="#475569" stroke-width={(1.5 * px) / Math.abs(t.a)} />
+					{/each}
 					{#each ghost.scene.drills as drill, index (index)}
 						<circle cx={drill.cx} cy={drill.cy} r={drill.r} fill="#fffbeb" />
 					{/each}

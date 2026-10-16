@@ -20,6 +20,7 @@
 		drilling: false,
 		output: false,
 		doubleSided: false,
+		profile: false,
 		silkscreen: false
 	});
 
@@ -54,7 +55,7 @@
 {/snippet}
 
 {#snippet group(
-	id: 'tool' | 'isolation' | 'drilling' | 'output' | 'doubleSided' | 'silkscreen',
+	id: 'tool' | 'isolation' | 'drilling' | 'output' | 'doubleSided' | 'profile' | 'silkscreen',
 	title: string,
 	body: import('svelte').Snippet
 )}
@@ -322,6 +323,102 @@
 		{/if}
 	{/snippet}
 	{@render group('doubleSided', 'Double-sided machining', doubleSidedBody)}
+
+	{#snippet profileBody()}
+		<label class="flex items-center justify-between gap-2 py-1">
+			<span class="text-sm text-slate-600">Board cutout GCode</span>
+			<input type="checkbox" class="rounded" bind:checked={settings.profile.enabled} />
+		</label>
+		{#if settings.profile.enabled}
+			{@render numberField(
+				'End mill diameter',
+				'mm',
+				() => settings.profile.toolDiameterMm,
+				(v) => (settings.profile.toolDiameterMm = v),
+				0.1,
+				0.1
+			)}
+			{@render numberField(
+				'Total depth',
+				unit,
+				() => settings.profile.depth,
+				(v) => (settings.profile.depth = v)
+			)}
+			{@render numberField(
+				'Depth per pass',
+				unit,
+				() => settings.profile.depthPerPass,
+				(v) => (settings.profile.depthPerPass = v)
+			)}
+			{@render numberField(
+				'Safe height',
+				unit,
+				() => settings.profile.safeZ,
+				(v) => (settings.profile.safeZ = v)
+			)}
+			{@render numberField(
+				'Cutting speed',
+				feedUnit,
+				() => settings.profile.xySpeed,
+				(v) => (settings.profile.xySpeed = v),
+				1
+			)}
+			{@render numberField(
+				'Plunge speed',
+				feedUnit,
+				() => settings.profile.plungeSpeed,
+				(v) => (settings.profile.plungeSpeed = v),
+				1
+			)}
+			{@render numberField(
+				'Spindle speed',
+				'RPM',
+				() => settings.profile.spindleRPM,
+				(v) => (settings.profile.spindleRPM = Math.round(v)),
+				500
+			)}
+			<label class="flex items-center justify-between gap-2 py-1">
+				<span class="text-sm text-slate-600">Cut from</span>
+				<select bind:value={settings.profile.side} class="rounded-md border-slate-300 py-1 text-sm">
+					<option value="bottom">Bottom (flipped)</option>
+					<option value="top">Top</option>
+				</select>
+			</label>
+			{@render numberField(
+				'Holding tabs',
+				'',
+				() => settings.profile.tabCount,
+				(v) => (settings.profile.tabCount = Math.max(0, Math.round(v))),
+				1,
+				0
+			)}
+			{#if settings.profile.tabCount > 0}
+				{@render numberField(
+					'Tab width',
+					'mm',
+					() => settings.profile.tabWidthMm,
+					(v) => (settings.profile.tabWidthMm = v),
+					0.5,
+					0.5
+				)}
+				{@render numberField(
+					'Tab height',
+					'mm',
+					() => settings.profile.tabHeightMm,
+					(v) => (settings.profile.tabHeightMm = v),
+					0.1,
+					0.1
+				)}
+			{/if}
+			<p class="py-1 text-xs text-slate-400">
+				An end mill follows the Edge.Cuts outline half a diameter outside the board (and inside any
+				cutouts), in several depth passes. Set the total depth to the board thickness plus a little
+				into the spoilboard. Tabs are left standing on the straight edges, measured up from the
+				bottom of the cut, so the board stays put until you snap it out. Run this file last.
+			</p>
+		{/if}
+	{/snippet}
+	{@render group('profile', 'Board cutout', profileBody)}
 
 	{#snippet silkscreenBody()}
 		<label class="flex items-center justify-between gap-2 py-1">

@@ -23,6 +23,7 @@ export const arcMove = (
 	endX: number,
 	endY: number,
 	iOffset: number,
-	jOffset: number
+	jOffset: number,
+	feedRate?: number
 ): string =>
-	`${clockwise ? 'G02' : 'G03'} X${coord(endX)} Y${coord(endY)} I${coord(iOffset)} J${coord(jOffset)}`;
+	`${clockwise ? 'G02' : 'G03'} X${coord(endX)} Y${coord(endY)} I${coord(iOffset)} J${coord(jOffset)}${feedRate !== undefined ? ` F${feed(feedRate)}` : ''}`;

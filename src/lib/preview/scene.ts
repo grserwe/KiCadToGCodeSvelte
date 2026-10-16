@@ -6,6 +6,7 @@ import { segmentToSvgPath } from './svgPath';
 import { graphicToSvgPath } from '../engine/silkscreen/svgPath';
 import { renderText, strokesToSvgPaths } from '../engine/silkscreen/text';
 import { selectLaserTargets } from '../engine/silkscreen/targets';
+import { buildProfileToolpath } from '../engine/profile/toolpath';
 
 export interface SceneTrack {
 	x1: number;
@@ -56,6 +57,8 @@ export interface BoardScene {
 	silkscreen: SceneGraphic[];
 	/** Edge.Cuts board outline, when the file has one. */
 	outline: string[];
+	/** Cutter centreline of the board cutout (when the profile is enabled). */
+	profile: { d: string; toolDiameterMm: number }[];
 	/** Laser alignment targets (when the silkscreen SVG is enabled). */
 	laserTargets: SceneTarget[];
 }
@@ -150,6 +153,13 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 		.map((graphic) => graphicToSvgPath(graphic))
 		.filter((d) => d !== '');
 
+	const profile = settings.profile.enabled
+		? buildProfileToolpath(board, settings.profile.toolDiameterMm).loops.map((loop) => ({
+				d: outlineToSvgPath(loop.edges),
+				toolDiameterMm: settings.profile.toolDiameterMm
+			}))
+		: [];
+
 	return {
 		width: board.width,
 		height: board.height,
@@ -160,6 +170,7 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 		toolpath,
 		silkscreen,
 		outline,
+		profile,
 		laserTargets
 	};
 }

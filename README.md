@@ -9,6 +9,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 - Accepts a `.kicad_pcb` file (KiCad 4 through 9) or a zipped KiCad project
 - Isolation-routing GCode for top and bottom copper, tool-diameter/V-bit aware, multi-pass with stepover
 - Drill GCode grouped per drill size, plus registration holes for double-sided flip-over machining (bottom side mirrored about the vertical centerline)
+- Board cutout GCode: an end mill follows the Edge.Cuts outline (lines, arcs, circles, rectangles, polygons — chained into closed loops, with inner cutouts cut first) offset by the cutter radius, climb milling in depth passes, leaving holding tabs on the straight edges
 - All pad shapes: circle, oval, rect, roundrect (incl. chamfered), trapezoid, and custom polygon (e.g. hexagonal) pads; ground pads get thermal-relief gaps
 - SVG preview of both board sides: copper, engraving paths, drills, registration holes, zoom/pan
 - GCode viewer: replays each generated program the way a GRBL controller would, drawing cuts at the tool's real width, rapids, and plunges over the designed copper (mapped into machine coordinates), with a move-by-move step-through and checks for rapids with the tool down, inconsistent arcs, cutting with the spindle off, and missing feed rates or units
@@ -25,6 +26,12 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 3. **Pad isolation** — circular pads become arcs with gaps where tracks enter; other shapes build an outline (lines + corner arcs, inflated exactly by the tool radius) and gaps are cut out as perimeter intervals.
 4. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
 
+## Board cutout
+
+The profile program (`<board>-profile.txt`) cuts the board free, so it runs last. The Edge.Cuts drawings are chained end to end into closed loops (endpoints within 0.05 mm join; circles and polygons are loops already), the largest loop is the board boundary and loops inside it are holes. Every loop is wound so the material is on its left — boundary counter-clockwise, holes clockwise — and then offset to its right by the cutter radius: straight edges shift, outward arcs grow, inward arcs shrink, convex corners get an arc around the vertex and concave corners are trimmed to the intersection. Holes are cut before the boundary. With the bottom side mirrored, the loop direction is reversed so the machine still climb mills.
+
+The cut is made in depth passes (total depth ÷ depth per pass, in output units). On the passes below the tab top, the cutter lifts to the tab height over each tab, which are spread evenly along the straight edges and kept clear of the corners. A board with no closed outline is cut along the rectangle of its extents, with a warning; an inside curve tighter than the cutter is reported and cut as a cusp.
+
 ## Silkscreen for the laser
 
 The silkscreen output is an SVG, not GCode: LightBurn imports SVG and plans the laser job itself. The parser keeps every `fp_*`/`gr_*` drawing on F.SilkS, B.SilkS and Edge.Cuts (lines, arcs, circles, rectangles, polygons, in both the modern three-point and the KiCad 4/5 centre-and-angle arc dialects), placed with the same footprint transform the pads use. The SVG uses LightBurn's first three palette colours so each kind of geometry arrives on its own layer:
@@ -39,7 +46,6 @@ The bottom side is mirrored left-over-right (the face the laser sees), the same 
 
 - Copper zones / filled pours
 - Curved (arc) traces
-- Board outline cut-out GCode
 - Inner layers (4+ layer boards)
 
 ## Development
@@ -62,5 +68,5 @@ Configure with `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (optionally `SMTP_PORT`, de
 ## Architecture
 
 - **SvelteKit + TypeScript + Tailwind 4**, `adapter-node`, no database, no auth. The only server code is `src/routes/api/feedback/` and `src/lib/server/email.ts`.
-- The conversion engine is a pure, framework-free TS library in `src/lib/engine/` (`sexpr/` tokenizer → `parser/` → `model/` → `geometry/` → `toolpath/` → `gcode/`, plus `silkscreen/` for the laser SVG), runnable in the browser worker and in vitest.
+- The conversion engine is a pure, framework-free TS library in `src/lib/engine/` (`sexpr/` tokenizer → `parser/` → `model/` → `geometry/` → `toolpath/` → `gcode/`, plus `profile/` for the board cutout and `silkscreen/` for the laser SVG), runnable in the browser worker and in vitest.
 - Deployed on [Fly.io](https://fly.io) via GitHub Actions (`.github/workflows/deploy.yml`): checks on every push/PR, deploy on master.

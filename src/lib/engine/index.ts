@@ -8,6 +8,7 @@ export { buildLayerToolpath, type LayerToolpath, type ToolpathOptions } from './
 export { applyMinimumWidths, type WideningOptions, type WideningResult } from './toolpath/widening';
 export { generateGCode, type GCodeFile, type GenerateResult } from './gcode/emit';
 export { generateSilkscreenFiles, type SilkscreenResult } from './silkscreen/svg';
+export { buildProfileToolpath, type ProfileLoop, type ProfileToolpath } from './profile/toolpath';
 export { graphicToSvgPath } from './silkscreen/svgPath';
 export {
 	defaultSettings,

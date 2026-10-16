@@ -27,10 +27,12 @@
 				return 2;
 			case 'isolation-bottom':
 				return 3;
-			case 'silkscreen-top':
+			case 'profile':
 				return 4;
-			case 'silkscreen-bottom':
+			case 'silkscreen-top':
 				return 5;
+			case 'silkscreen-bottom':
+				return 6;
 		}
 	}
 

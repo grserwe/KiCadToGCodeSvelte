@@ -72,6 +72,15 @@ export class LineEdge {
 	tessellate(points: Vec2[]): void {
 		points.push({ ...this.start });
 	}
+
+	/** The part of this edge between two distances along it, same direction. */
+	slice(fromDistance: number, toDistance: number): LineEdge {
+		return new LineEdge(this.positionAtDistance(fromDistance), this.positionAtDistance(toDistance));
+	}
+
+	reversed(): LineEdge {
+		return new LineEdge(this.end, this.start);
+	}
 }
 
 export class ArcEdge {
@@ -189,6 +198,23 @@ export class ArcEdge {
 		for (let step = 0; step < steps; step++) {
 			points.push(this.positionAtAngle(this.startAngle + perStep * step));
 		}
+	}
+
+	/** The part of this arc between two distances along it, same direction. */
+	slice(fromDistance: number, toDistance: number): ArcEdge {
+		const direction = this.sweep >= 0 ? 1 : -1;
+		const fromDegrees = this.radius > 0 ? radToDeg(fromDistance / this.radius) : 0;
+		const toDegrees = this.radius > 0 ? radToDeg(toDistance / this.radius) : 0;
+		return new ArcEdge(
+			this.center,
+			this.radius,
+			this.startAngle + direction * fromDegrees,
+			direction * (toDegrees - fromDegrees)
+		);
+	}
+
+	reversed(): ArcEdge {
+		return new ArcEdge(this.center, this.radius, this.startAngle + this.sweep, -this.sweep);
 	}
 }
 

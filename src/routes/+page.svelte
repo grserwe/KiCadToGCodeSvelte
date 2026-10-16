@@ -98,7 +98,9 @@
 	const viewedToolDiameter = $derived(
 		viewedFile
 			? convertLength(
-					viewedFile.drillDiameterMm ?? effectiveToolDiameterMm(settings),
+					viewedFile.toolDiameterMm ??
+						viewedFile.drillDiameterMm ??
+						effectiveToolDiameterMm(settings),
 					'mm',
 					settings.outputUnits
 				)
@@ -266,9 +268,9 @@
 							What isn't supported yet?
 						</summary>
 						<p class="mt-2 text-sm text-slate-600">
-							Copper zones (filled pours), curved traces, inner layers of 4+ layer boards, and board
-							outline cut-out GCode. You'll get a clear warning whenever your design uses something
-							the generator has to skip or approximate.
+							Copper zones (filled pours), curved traces, and inner layers of 4+ layer boards.
+							You'll get a clear warning whenever your design uses something the generator has to
+							skip or approximate.
 						</p>
 					</details>
 				</div>
@@ -414,6 +416,16 @@
 								<li>Engrave the top side, then drill all holes.</li>
 								<li>Flip the board left-over-right onto the pins.</li>
 								<li>Engrave the bottom side.</li>
+								{#if result.files.some((file) => file.kind === 'profile')}
+									{#if settings.profile.side === 'bottom'}
+										<li>Cut the board outline free with the bottom side still up.</li>
+									{:else}
+										<li>Flip back onto the pins and cut the board outline free.</li>
+									{/if}
+									{#if settings.profile.tabCount > 0}
+										<li>Snap the board out of its tabs and file the stubs flush.</li>
+									{/if}
+								{/if}
 								{#if result.files.some((file) => file.kind.startsWith('silkscreen'))}
 									<li>
 										Laser the silkscreen SVG onto the component side, using LightBurn's Print and

@@ -56,6 +56,31 @@ export interface GCodeSettings {
 		enabled: boolean;
 	};
 
+	/**
+	 * Board cutout: an end mill follows the Edge.Cuts outline, offset by its
+	 * radius, in several depth passes, leaving tabs that hold the board until
+	 * it is snapped free. Depths and feeds are in the output units.
+	 */
+	profile: {
+		enabled: boolean;
+		/** End mill diameter in mm. */
+		toolDiameterMm: number;
+		/** Total cut depth: the board thickness plus a little into the spoilboard. */
+		depth: number;
+		depthPerPass: number;
+		safeZ: number;
+		xySpeed: number;
+		plungeSpeed: number;
+		spindleRPM: number;
+		/** Which side faces up when cutting; the bottom is mirrored like the bottom copper. */
+		side: 'top' | 'bottom';
+		/** Holding tabs around the outer edge; 0 for none. */
+		tabCount: number;
+		tabWidthMm: number;
+		/** Material left under each tab, measured up from the bottom of the cut. */
+		tabHeightMm: number;
+	};
+
 	fileExtension: string;
 }
 
@@ -100,6 +125,21 @@ export function defaultSettings(): GCodeSettings {
 
 		silkscreen: {
 			enabled: true
+		},
+
+		profile: {
+			enabled: true,
+			toolDiameterMm: 1,
+			depth: 0.07,
+			depthPerPass: 0.025,
+			safeZ: 0.25,
+			xySpeed: 10,
+			plungeSpeed: 5,
+			spindleRPM: 10000,
+			side: 'bottom',
+			tabCount: 4,
+			tabWidthMm: 3,
+			tabHeightMm: 0.8
 		},
 
 		fileExtension: '.txt'

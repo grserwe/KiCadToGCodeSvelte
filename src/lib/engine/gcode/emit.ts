@@ -8,6 +8,9 @@ import { createOutputTransform, type OutputTransform } from './transforms';
 import { effectiveToolDiameterMm, type GCodeSettings } from './settings';
 import type { GCodeFile } from './outputFile';
 import { generateSilkscreenFiles } from '../silkscreen/svg';
+import { buildProfileToolpath, reverseProfileLoop } from '../profile/toolpath';
+import type { OutlineEdge } from '../geometry/outline';
+import { convertLength } from '../model/units';
 
 export type { GCodeFile } from './outputFile';
 
@@ -66,6 +69,12 @@ export function generateGCode(
 
 	for (const file of drillFiles(board, boardName, settings, generatedAt, extension)) {
 		files.push(file);
+	}
+
+	if (settings.profile.enabled) {
+		const profile = profileFile(board, boardName, settings, generatedAt, extension);
+		warnings.push(...profile.warnings);
+		if (profile.file) files.push(profile.file);
 	}
 
 	const silkscreen = generateSilkscreenFiles(board, boardName, settings);
@@ -344,6 +353,207 @@ function emitDrillSequence(holes: Vec2[], settings: GCodeSettings, lines: string
 
 		position = hole;
 	}
+}
+
+/** A stretch of a cutter path, flagged when it crosses a holding tab. */
+export interface ProfilePiece {
+	edge: OutlineEdge;
+	inTab: boolean;
+}
+
+/**
+ * Where along a loop (distance from its start, mm) the holding tabs sit:
+ * `count` tabs of `width` spread evenly over the straight edges, kept clear
+ * of the corner arcs where a tab would be awkward to snap off. A loop with
+ * too little straight edge (a round board) spreads them over everything.
+ */
+export function tabCenters(edges: OutlineEdge[], count: number, width: number): number[] {
+	if (count <= 0 || width <= 0) return [];
+	const total = edges.reduce((sum, edge) => sum + edge.length, 0);
+	const straight = edges
+		.filter((edge) => edge.kind === 'line')
+		.reduce((sum, edge) => sum + edge.length, 0);
+
+	if (straight < 2 * width || straight < total * 0.25) {
+		const tabs = Math.min(count, Math.floor(total / (2 * width)));
+		return Array.from({ length: tabs }, (_, index) => (total / tabs) * (index + 0.5));
+	}
+
+	const tabs = Math.min(count, Math.max(1, Math.floor(straight / (2 * width))));
+	const spacing = straight / tabs;
+	const centers: number[] = [];
+	let along = 0;
+	let alongStraight = 0;
+	let nextTab = 0;
+	for (const edge of edges) {
+		if (edge.kind === 'line') {
+			while (nextTab < tabs) {
+				const target = spacing * (nextTab + 0.5);
+				if (target >= alongStraight + edge.length) break;
+				nextTab++;
+				if (edge.length < width) continue; // too short to carry a whole tab
+				const local = Math.min(
+					Math.max(target - alongStraight, width / 2),
+					edge.length - width / 2
+				);
+				centers.push(along + local);
+			}
+			alongStraight += edge.length;
+		}
+		along += edge.length;
+	}
+	return centers;
+}
+
+/** Split a closed loop into pieces at the holding-tab boundaries. */
+export function splitLoopAtTabs(
+	edges: OutlineEdge[],
+	count: number,
+	width: number
+): ProfilePiece[] {
+	const intervals = tabCenters(edges, count, width).map((center) => ({
+		from: center - width / 2,
+		to: center + width / 2
+	}));
+	if (intervals.length === 0) return edges.map((edge) => ({ edge, inTab: false }));
+	const inTab = (along: number) =>
+		intervals.some((interval) => along >= interval.from && along <= interval.to);
+
+	const pieces: ProfilePiece[] = [];
+	let offset = 0;
+	for (const edge of edges) {
+		const end = offset + edge.length;
+		const cuts = [0];
+		for (const interval of intervals) {
+			for (const boundary of [interval.from, interval.to]) {
+				const local = boundary - offset;
+				if (local > 1e-6 && local < edge.length - 1e-6) cuts.push(local);
+			}
+		}
+		cuts.sort((a, b) => a - b);
+		cuts.push(edge.length);
+		for (let index = 0; index + 1 < cuts.length; index++) {
+			const from = cuts[index];
+			const to = cuts[index + 1];
+			if (to - from <= 1e-6) continue;
+			pieces.push({
+				edge: edge.slice(from, to),
+				inTab: inTab(offset + (from + to) / 2)
+			});
+		}
+		offset = end;
+	}
+	return pieces;
+}
+
+/**
+ * The board cutout: an end mill traces every outline loop in depth passes.
+ * Holes inside the board are cut first; the outer boundary last, with tabs
+ * left standing on the final passes so the board stays put until snapped
+ * free. Run after everything else — it separates the board from the blank.
+ */
+function profileFile(
+	board: BoardModel,
+	boardName: string,
+	settings: GCodeSettings,
+	generatedAt: Date,
+	extension: string
+): { file: GCodeFile | null; warnings: EngineWarning[] } {
+	const profile = settings.profile;
+	const toolpath = buildProfileToolpath(board, profile.toolDiameterMm);
+	if (toolpath.loops.length === 0) return { file: null, warnings: toolpath.warnings };
+
+	const sideMirror = profile.side === 'bottom' && settings.mirrorBottom;
+	const transform = createOutputTransform(settings, board.width, board.height, sideMirror);
+	const units = settings.outputUnits;
+	const rapidFeed = settings.useMachineRapids ? undefined : settings.xyRapidSpeed;
+
+	const depth = Math.max(profile.depth, 0);
+	const perPass = Math.max(profile.depthPerPass, 1e-4);
+	const passCount = Math.max(1, Math.ceil(depth / perPass - 1e-9));
+	const passDepths = Array.from({ length: passCount }, (_, index) =>
+		Math.min(depth, perPass * (index + 1))
+	);
+	const tabHeight = convertLength(profile.tabHeightMm, 'mm', units);
+	const tabTopZ = Math.min(0, -(depth - tabHeight));
+	const tabCount = Math.max(0, Math.round(profile.tabCount));
+	const unitLabel = units === 'inch' ? 'in' : 'mm';
+
+	const lines = [
+		...header(
+			boardName,
+			'Profile',
+			profile.side === 'bottom' ? 'Bottom (board flipped)' : 'Top',
+			generatedAt,
+			[
+				...(sideMirror
+					? ['( Mirrored for flip-over machining: flip the blank left-over-right )']
+					: []),
+				`( Tool: ${profile.toolDiameterMm} mm end mill )`,
+				`( Depth: ${depth} ${unitLabel} in ${passCount} pass${passCount === 1 ? '' : 'es'} of ${perPass} ${unitLabel} )`,
+				tabCount > 0
+					? `( Tabs: ${tabCount} x ${profile.tabWidthMm} mm wide, ${profile.tabHeightMm} mm tall, on the outer edge )`
+					: '( Tabs: none — hold the board down )',
+				'( Run this file last: it cuts the board free )'
+			]
+		),
+		...initialize(settings, profile.safeZ, profile.spindleRPM)
+	];
+
+	for (const loop of toolpath.loops) {
+		// Mirrored output reverses travel; flip the loop so the machine still climb mills.
+		const oriented = transform.mirrored ? reverseProfileLoop(loop) : loop;
+		const pieces = splitLoopAtTabs(
+			oriented.edges,
+			oriented.outer ? tabCount : 0,
+			profile.tabWidthMm
+		);
+		const start = transform.point(pieces[0].edge.start);
+
+		lines.push(oriented.outer ? '( Board outline )' : '( Cutout inside the board )');
+		lines.push(g.rapidZ(profile.safeZ));
+		lines.push(g.rapidXY(start.x, start.y, rapidFeed));
+
+		let z = profile.safeZ;
+		for (const passDepth of passDepths) {
+			const passZ = -passDepth;
+			const tabsActive = passZ < tabTopZ - 1e-9;
+			for (const piece of pieces) {
+				const targetZ = tabsActive && piece.inTab ? tabTopZ : passZ;
+				if (Math.abs(z - targetZ) > 1e-9) {
+					lines.push(g.moveZ(targetZ, profile.plungeSpeed));
+					z = targetZ;
+				}
+				lines.push(profileMove(piece.edge, transform, profile.xySpeed));
+			}
+		}
+		lines.push(g.rapidZ(profile.safeZ));
+	}
+
+	lines.push(...tearDown(settings, profile.safeZ));
+
+	return {
+		file: {
+			fileName: `${boardName}-profile${extension}`,
+			label: `Board cutout, ${profile.toolDiameterMm} mm end mill${sideMirror ? ' (mirrored)' : ''} — run last`,
+			kind: 'profile',
+			toolDiameterMm: profile.toolDiameterMm,
+			machining: { facing: profile.side, sideMirror },
+			content: lines.join('\n') + '\n'
+		},
+		warnings: toolpath.warnings
+	};
+}
+
+/** The feed move along one edge, in machine coordinates. */
+function profileMove(edge: OutlineEdge, transform: OutputTransform, feedRate: number): string {
+	const end = transform.point(edge.end);
+	if (edge.kind === 'line') return g.moveXY(end.x, end.y, feedRate);
+	const start = transform.point(edge.start);
+	const center = transform.point(edge.center);
+	// A right-curving (clockwise) arc stays clockwise unless the output is mirrored.
+	const clockwise = edge.sweep < 0 !== transform.mirrored;
+	return g.arcMove(clockwise, end.x, end.y, center.x - start.x, center.y - start.y, feedRate);
 }
 
 /**

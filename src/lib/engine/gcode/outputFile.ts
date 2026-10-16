@@ -10,9 +10,12 @@ export interface GCodeFile {
 		| 'isolation-bottom'
 		| 'drill'
 		| 'registration'
+		| 'profile'
 		| 'silkscreen-top'
 		| 'silkscreen-bottom';
 	drillDiameterMm?: number;
+	/** Cutter diameter for milled programs (the profile cutout). */
+	toolDiameterMm?: number;
 	/**
 	 * For GCode programs: which board face is up when this file runs, and
 	 * whether the output was mirrored for flip-over machining. Lets the viewer

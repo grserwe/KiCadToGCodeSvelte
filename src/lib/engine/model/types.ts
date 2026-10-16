@@ -89,7 +89,9 @@ export interface EngineWarning {
 		| 'width-capped'
 		| 'clearance'
 		| 'graphic-skipped'
-		| 'silkscreen-text';
+		| 'silkscreen-text'
+		| 'outline-open'
+		| 'outline-tight';
 	message: string;
 }
 
