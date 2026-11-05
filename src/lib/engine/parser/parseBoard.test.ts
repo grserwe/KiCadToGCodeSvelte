@@ -2,9 +2,59 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseBoard } from './parseBoard';
 import { BoardParseError } from './errors';
+import { applyMinimumWidths } from '../toolpath/widening';
 
 const fixture = (name: string): string =>
 	readFileSync(new URL(`../__fixtures__/${name}`, import.meta.url), 'utf8');
+
+describe('parseBoard — KiCad 10 nets, written by name', () => {
+	const pad = (name: string, x: number, net: string) =>
+		`(pad "${name}" thru_hole circle (at ${x} 0) (size 1.6 1.6) (drill 0.8)
+			(layers "*.Cu" "*.Mask") ${net})`;
+
+	const source = `(kicad_pcb (version 20260206) (generator "pcbnew") (generator_version "10.0")
+		(footprint "A" (layer "F.Cu") (at 100 100)
+			${pad('1', 0, '(net "SIG")')}
+			${pad('2', 5, '(net "GND")')}
+			${pad('3', 10, '(net "5")')})
+		(footprint "B" (layer "F.Cu") (at 100 110)
+			${pad('1', 0, '(net "SIG")')}
+			${pad('2', 5, '(net "GND")')}
+			${pad('3', 10, '')})
+		(segment (start 100 100) (end 100 110) (width 0.2) (layer "B.Cu") (net "SIG"))
+		(via (at 105 105) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net "GND")))`;
+
+	const { board } = parseBoard(source);
+	const padNet = (footprint: string, padName: string) =>
+		board.pads.find((p) => p.footprint === footprint && p.padName === padName)!.net;
+
+	it('gives every record on the same net the same id', () => {
+		expect(padNet('A', '1')).toBeGreaterThan(0);
+		expect(padNet('B', '1')).toBe(padNet('A', '1'));
+		expect(board.tracks[0].net).toBe(padNet('A', '1'));
+		expect(board.pads.find((p) => p.source === 'via')!.net).toBe(padNet('A', '2'));
+	});
+
+	it('keeps different nets apart, even one whose name is a number', () => {
+		const ids = [padNet('A', '1'), padNet('A', '2'), padNet('A', '3')];
+		expect(new Set(ids).size).toBe(3);
+		expect(ids).not.toContain(0);
+	});
+
+	it('leaves a pad with no net unconnected', () => {
+		expect(padNet('B', '3')).toBe(0);
+	});
+
+	it('widens a track that ends on its own pads instead of calling them too close', () => {
+		const { board: widened, warnings } = applyMinimumWidths(board, {
+			minimumTrackWidthMm: 0.5,
+			minimumPadDiameterMm: 0,
+			clearanceMm: 0.1
+		});
+		expect(warnings).toEqual([]);
+		expect(widened.tracks[0].width).toBeCloseTo(0.5, 6);
+	});
+});
 
 describe('parseBoard — KiCad 9 sample (TopAndBottomLayer)', () => {
 	const { board, warnings } = parseBoard(fixture('TopAndBottomLayer.kicad_pcb'));

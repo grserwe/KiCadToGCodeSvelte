@@ -38,7 +38,7 @@
 	async function loadSample() {
 		error = '';
 		try {
-			const response = await fetch('/samples/TopAndBottomLayer.kicad_pcb');
+			const response = await fetch('/samples/ShowerController.kicad_pcb');
 			board = parseBoard(await response.text()).board;
 		} catch (parseError) {
 			board = null;

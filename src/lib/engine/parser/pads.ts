@@ -1,6 +1,7 @@
 import type { SExpr } from '../sexpr/types';
 import type { Drill, EngineWarning, PadLayers, PadShape, Vec2 } from '../model/types';
 import type { Dialect } from './dialect';
+import type { NetIdReader } from './nets';
 import { findAllRecursive, findChild, numberAttr } from './sexprHelpers';
 
 /** Default via drill when a legacy file omits it (KiCad's own default). */
@@ -22,7 +23,12 @@ export interface RawPad {
 	padName?: string;
 }
 
-export function extractPads(root: SExpr, dialect: Dialect, warnings: EngineWarning[]): RawPad[] {
+export function extractPads(
+	root: SExpr,
+	dialect: Dialect,
+	netId: NetIdReader,
+	warnings: EngineWarning[]
+): RawPad[] {
 	const pads: RawPad[] = [];
 
 	for (const footprint of findAllRecursive(root, dialect.footprintNodeName)) {
@@ -48,13 +54,14 @@ export function extractPads(root: SExpr, dialect: Dialect, warnings: EngineWarni
 				{ x: footprintX, y: footprintY },
 				footprintRotation,
 				dialect,
+				netId,
 				warnings
 			);
 			if (pad) pads.push(pad);
 		}
 	}
 
-	pads.push(...extractVias(root, warnings));
+	pads.push(...extractVias(root, netId, warnings));
 
 	return pads;
 }
@@ -65,6 +72,7 @@ function parseFootprintPad(
 	footprintPosition: Vec2,
 	footprintRotation: number,
 	dialect: Dialect,
+	netId: NetIdReader,
 	warnings: EngineWarning[]
 ): RawPad | null {
 	const padName = padRecord.attributes[0] ?? 'Unknown';
@@ -120,7 +128,7 @@ function parseFootprintPad(
 		isGround: dialect.isPadGround(padRecord),
 		plated: padType !== 'np_thru_hole',
 		source: 'footprint',
-		net: numberAttr(findChild(padRecord, 'net'), 0) ?? 0,
+		net: netId(padRecord),
 		footprint: footprintName,
 		padName
 	};
@@ -294,7 +302,7 @@ function customPadPolygonPoints(padRecord: SExpr): Vec2[] | null {
 	return points.length >= 3 ? points : null;
 }
 
-function extractVias(root: SExpr, warnings: EngineWarning[]): RawPad[] {
+function extractVias(root: SExpr, netId: NetIdReader, warnings: EngineWarning[]): RawPad[] {
 	const vias: RawPad[] = [];
 
 	for (const via of findAllRecursive(root, 'via')) {
@@ -343,7 +351,7 @@ function extractVias(root: SExpr, warnings: EngineWarning[]): RawPad[] {
 			isGround: false,
 			plated: true,
 			source: 'via',
-			net: numberAttr(findChild(via, 'net'), 0) ?? 0
+			net: netId(via)
 		});
 	}
 

@@ -1,5 +1,6 @@
 import type { SExpr } from '../sexpr/types';
 import type { EngineWarning, LayerId, Vec2 } from '../model/types';
+import type { NetIdReader } from './nets';
 import { findAllRecursive, findChild, numberAttr } from './sexprHelpers';
 
 /** A track still in KiCad file coordinates (Y-down, absolute mm). */
@@ -20,7 +21,11 @@ function copperLayer(layerName: string | undefined): LayerId | 'inner' | 'none' 
 	return 'none';
 }
 
-export function extractTracks(root: SExpr, warnings: EngineWarning[]): RawTrack[] {
+export function extractTracks(
+	root: SExpr,
+	netId: NetIdReader,
+	warnings: EngineWarning[]
+): RawTrack[] {
 	const tracks: RawTrack[] = [];
 
 	for (const segment of findAllRecursive(root, 'segment')) {
@@ -64,7 +69,7 @@ export function extractTracks(root: SExpr, warnings: EngineWarning[]): RawTrack[
 			end: { x: endX, y: endY },
 			width,
 			layer,
-			net: numberAttr(findChild(segment, 'net'), 0) ?? 0
+			net: netId(segment)
 		});
 	}
 
