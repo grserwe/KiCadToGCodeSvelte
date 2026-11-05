@@ -15,6 +15,11 @@ primary_region = 'iad'
 [build]
   dockerfile = 'Dockerfile'
 
+[env]
+  # Site code for the usage counts at https://grserwe.goatcounter.com. Not a
+  # secret: it appears in the page. Remove it to turn the counting off.
+  PUBLIC_GOATCOUNTER_CODE = 'grserwe'
+
 [http_service]
   internal_port = 8080
   force_https = true

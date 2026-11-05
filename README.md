@@ -65,6 +65,12 @@ npm run build      # production build (adapter-node)
 
 Configure with `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (optionally `SMTP_PORT`, default 465), `EMAIL_FROM` and `FEEDBACK_TO` — see `.env.example`. Production uses Resend's SMTP relay with a sender on the verified `kicadtogcode.com` domain. The Dockerfile raises adapter-node's `BODY_SIZE_LIMIT` to 25 MB so attachments fit.
 
+## Usage counts
+
+Anonymous, cookie-free counts go to [GoatCounter](https://www.goatcounter.com): page views, plus three events, `board-converted`, `sample-converted` and `output-downloaded`. Regenerating after a settings change isn't counted. `src/lib/analytics.ts` only ever sends those fixed names, never anything from the board, including its name. Results are at [grserwe.goatcounter.com](https://grserwe.goatcounter.com).
+
+The site code comes from `PUBLIC_GOATCOUNTER_CODE`, set in `fly.toml`. Without it nothing loads, and the note on the landing page saying what is counted disappears too. GoatCounter's script also ignores localhost, so local development never adds to the numbers.
+
 ## Architecture
 
 - **SvelteKit + TypeScript + Tailwind 4**, `adapter-node`, no database, no auth. The only server code is `src/routes/api/feedback/` and `src/lib/server/email.ts`.

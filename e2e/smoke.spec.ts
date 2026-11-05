@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+	await page.route('https://gc.zgo.at/**', (route) => route.abort());
+});
+
 /** Navigate and wait for Svelte hydration so clicks are never no-ops. */
 async function gotoHydrated(page: Page): Promise<void> {
 	await page.goto('/');
