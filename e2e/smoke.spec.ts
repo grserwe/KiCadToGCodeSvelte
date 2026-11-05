@@ -19,15 +19,15 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 
 	// Preview appears with the board dimensions (worker may compile on first
 	// use in dev mode, so allow extra time).
-	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByText(/145\.0 × 100\.0 mm/)).toBeVisible({ timeout: 20_000 });
 	const preview = page.getByRole('img', { name: 'Board preview' });
 	await expect(preview).toBeVisible();
 	expect(await preview.locator('line').count()).toBeGreaterThan(0);
 
-	// All five expected files are listed.
+	// The expected files are listed (one drill file per drill size).
 	await expect(page.getByText('SampleBoard-top-isolation.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-bottom-isolation.txt')).toBeVisible();
-	await expect(page.getByText('SampleBoard-drill-0.5mm.txt')).toBeVisible();
+	await expect(page.getByText('SampleBoard-drill-0.8mm.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-registration.txt')).toBeVisible();
 	await expect(page.getByText('SampleBoard-silkscreen-top.svg')).toBeVisible();
 
@@ -37,7 +37,7 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 
 	// The GCode viewer replays the drill program and finds nothing wrong.
 	await page
-		.locator('li', { hasText: 'SampleBoard-drill-0.5mm.txt' })
+		.locator('li', { hasText: 'SampleBoard-drill-0.8mm.txt' })
 		.getByRole('button', { name: 'View' })
 		.click();
 	const viewer = page.getByRole('img', { name: 'GCode toolpath preview' });
@@ -67,7 +67,7 @@ test('sample board converts, previews both sides, and downloads GCode', async ({
 test('settings changes regenerate output and persist across reloads', async ({ page }) => {
 	await gotoHydrated(page);
 	await page.getByRole('button', { name: /try the sample board/i }).click();
-	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByText(/145\.0 × 100\.0 mm/)).toBeVisible({ timeout: 20_000 });
 
 	// Change the file extension setting (Output & origin group).
 	await page.getByRole('button', { name: /output & origin/i }).click();
@@ -88,7 +88,7 @@ test('a zipped project extracts its board file', async ({ page }) => {
 	// Build a zip in the browser from the served sample and load it through
 	// the real file input.
 	const zipBuffer = await page.evaluate(async () => {
-		const response = await fetch('/samples/TopAndBottomLayer.kicad_pcb');
+		const response = await fetch('/samples/ShowerController.kicad_pcb');
 		const text = await response.text();
 		// Minimal STORED-entry zip built by hand to avoid a bundler import.
 		const encoder = new TextEncoder();
@@ -211,7 +211,7 @@ function capturedFeedback(page: Page): Promise<CapturedFeedback> {
 test('feedback dialog emails the message with the PCB attached by default', async ({ page }) => {
 	await gotoHydrated(page);
 	await page.getByRole('button', { name: /try the sample board/i }).click();
-	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByText(/145\.0 × 100\.0 mm/)).toBeVisible({ timeout: 20_000 });
 
 	await page.getByRole('button', { name: /report a problem/i }).click();
 	const dialog = page.getByRole('dialog');
@@ -245,7 +245,7 @@ test('feedback dialog emails the message with the PCB attached by default', asyn
 test('unticking the PCB checkbox keeps the design out of the report', async ({ page }) => {
 	await gotoHydrated(page);
 	await page.getByRole('button', { name: /try the sample board/i }).click();
-	await expect(page.getByText(/21\.6 × 8\.3 mm/)).toBeVisible({ timeout: 20_000 });
+	await expect(page.getByText(/145\.0 × 100\.0 mm/)).toBeVisible({ timeout: 20_000 });
 
 	await page
 		.getByRole('banner')

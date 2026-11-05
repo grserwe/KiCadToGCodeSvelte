@@ -6,7 +6,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 
 ## Features
 
-- Accepts a `.kicad_pcb` file (KiCad 4 through 9) or a zipped KiCad project
+- Accepts a `.kicad_pcb` file (KiCad 4 through 10) or a zipped KiCad project
 - Isolation-routing GCode for top and bottom copper, tool-diameter/V-bit aware, multi-pass with stepover
 - Drill GCode grouped per drill size, plus registration holes for double-sided flip-over machining (bottom side mirrored about the vertical centerline)
 - Board cutout GCode: an end mill follows the Edge.Cuts outline (lines, arcs, circles, rectangles, polygons — chained into closed loops, with inner cutouts cut first) offset by the cutter radius, climb milling in depth passes, leaving holding tabs on the straight edges
