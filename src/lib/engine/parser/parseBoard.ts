@@ -3,6 +3,7 @@ import type { BoardModel, EngineWarning, Graphic, Pad, Track, Vec2 } from '../mo
 import { dialectForVersion } from './dialect';
 import { BoardParseError } from './errors';
 import { computeExtents, type FileExtents } from './extents';
+import { createNetIdReader } from './nets';
 import { extractPads } from './pads';
 import { extractTracks } from './tracks';
 import { extractGraphics, type RawGraphic } from './graphics';
@@ -46,8 +47,10 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 	const warnings: EngineWarning[] = [];
 	const dialect = dialectForVersion(fileVersion);
 
-	const rawTracks = extractTracks(root, warnings);
-	const rawPads = extractPads(root, dialect, warnings);
+	const netId = createNetIdReader(root);
+
+	const rawTracks = extractTracks(root, netId, warnings);
+	const rawPads = extractPads(root, dialect, netId, warnings);
 	const rawGraphics = extractGraphics(root, dialect, warnings);
 	const extents = computeExtents(root, rawPads, rawTracks);
 

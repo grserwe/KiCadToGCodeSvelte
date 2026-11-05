@@ -136,7 +136,7 @@
 	}
 
 	async function loadSample() {
-		const response = await fetch('/samples/TopAndBottomLayer.kicad_pcb');
+		const response = await fetch('/samples/ShowerController.kicad_pcb');
 		await convert('SampleBoard', await response.text());
 	}
 

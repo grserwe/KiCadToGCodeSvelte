@@ -24,7 +24,7 @@ export interface Track {
 	end: Vec2;
 	width: number;
 	layer: LayerId;
-	/** KiCad net number; 0 = unconnected. Features on the same net may touch. */
+	/** Net id, unique per net on the board; 0 = unconnected. Features on the same net may touch. */
 	net: number;
 }
 
@@ -68,7 +68,7 @@ export interface Pad {
 	plated: boolean;
 	/** 'footprint' pads come from components; 'via' pads from via records. */
 	source: 'footprint' | 'via';
-	/** KiCad net number; 0 = unconnected. Features on the same net may touch. */
+	/** Net id, unique per net on the board; 0 = unconnected. Features on the same net may touch. */
 	net: number;
 	footprint?: string;
 	padName?: string;
