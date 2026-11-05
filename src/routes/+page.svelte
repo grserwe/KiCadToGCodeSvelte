@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { browser } from '$app/environment';
+	import { env } from '$env/dynamic/public';
+	import { trackEvent, type UsageEvent } from '$lib/analytics';
 	import FileDrop from '$lib/components/FileDrop.svelte';
 	import Stepper from '$lib/components/Stepper.svelte';
 	import BoardPreview from '$lib/components/BoardPreview.svelte';
@@ -118,7 +120,11 @@
 			try {
 				const candidates = extractPcbFromZip(new Uint8Array(await file.arrayBuffer()));
 				if (candidates.length === 1) {
-					await convert(boardNameFromPath(candidates[0].path), candidates[0].contents);
+					await convert(
+						boardNameFromPath(candidates[0].path),
+						candidates[0].contents,
+						'board-converted'
+					);
 				} else {
 					zipCandidates = candidates;
 				}
@@ -127,25 +133,27 @@
 			}
 			return;
 		}
-		await convert(file.name.replace(/\.kicad_pcb$/i, ''), await file.text());
+		await convert(file.name.replace(/\.kicad_pcb$/i, ''), await file.text(), 'board-converted');
 	}
 
 	async function chooseCandidate(candidate: PcbCandidate) {
 		zipCandidates = null;
-		await convert(boardNameFromPath(candidate.path), candidate.contents);
+		await convert(boardNameFromPath(candidate.path), candidate.contents, 'board-converted');
 	}
 
 	async function loadSample() {
 		const response = await fetch('/samples/TopAndBottomLayer.kicad_pcb');
-		await convert('SampleBoard', await response.text());
+		await convert('SampleBoard', await response.text(), 'sample-converted');
 	}
 
-	async function convert(name: string, contents: string) {
+	/** `usageEvent` marks a board the user chose; regenerating after a settings change has none. */
+	async function convert(name: string, contents: string, usageEvent?: UsageEvent) {
 		error = '';
 		converting = true;
 		boardSource = { name, contents };
 		try {
 			result = await convertBoard(contents, name, $state.snapshot(settings));
+			if (usageEvent) trackEvent(usageEvent);
 		} catch (conversionError) {
 			result = null;
 			error = (conversionError as Error).message;
@@ -239,6 +247,11 @@
 				<p class="mt-6 text-sm text-slate-500">
 					Everything runs in your browser — your design never leaves your computer.
 				</p>
+				{#if env.PUBLIC_GOATCOUNTER_CODE}
+					<p class="mt-1 text-xs text-slate-500">
+						Anonymous, cookie-free visit counts from GoatCounter. Nothing about your board is sent.
+					</p>
+				{/if}
 
 				<div class="mx-auto mt-10 max-w-xl space-y-2 text-left">
 					<details class="rounded-xl border border-slate-200 bg-white px-4 py-3">

@@ -19,6 +19,7 @@ export default defineConfig({
 		// Run vite directly (not via `npm run`) so Playwright can terminate the
 		// real server process on Windows instead of orphaning a vite child.
 		command: `npx vite dev --port ${PORT} --strictPort`,
+		env: { PUBLIC_GOATCOUNTER_CODE: 'e2e-test' },
 		url: BASE_URL,
 		reuseExistingServer: false,
 		timeout: 120_000

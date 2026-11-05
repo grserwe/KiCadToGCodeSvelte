@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { zipSync, strToU8 } from 'fflate';
+	import { trackEvent } from '$lib/analytics';
 	import type { GCodeFile } from '$lib/engine/gcode/emit';
 
 	let {
@@ -43,6 +44,7 @@
 		anchor.download = fileName;
 		anchor.click();
 		URL.revokeObjectURL(url);
+		trackEvent('output-downloaded');
 	}
 
 	function downloadFile(file: GCodeFile) {
