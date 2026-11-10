@@ -11,6 +11,7 @@ import { generateSilkscreenFiles } from '../silkscreen/svg';
 import { buildProfileToolpath, reverseProfileLoop } from '../profile/toolpath';
 import type { OutlineEdge } from '../geometry/outline';
 import { convertLength } from '../model/units';
+import { groupDrillSizes } from './drillBits';
 
 export type { GCodeFile } from './outputFile';
 
@@ -67,9 +68,9 @@ export function generateGCode(
 		files.push(registrationFile(board, boardName, settings, generatedAt, extension));
 	}
 
-	for (const file of drillFiles(board, boardName, settings, generatedAt, extension)) {
-		files.push(file);
-	}
+	const drills = drillFiles(board, boardName, settings, generatedAt, extension);
+	files.push(...drills.files);
+	warnings.push(...drills.warnings);
 
 	if (settings.profile.enabled) {
 		const profile = profileFile(board, boardName, settings, generatedAt, extension);
@@ -292,40 +293,70 @@ function drillFiles(
 	settings: GCodeSettings,
 	generatedAt: Date,
 	extension: string
-): GCodeFile[] {
+): { files: GCodeFile[]; warnings: EngineWarning[] } {
 	const targets = drillTargets(board);
-	const diameters = [...new Set(targets.map((t) => t.diameterMm))].sort((a, b) => a - b);
+	const groups = groupDrillSizes(
+		targets.map((t) => t.diameterMm),
+		settings.drillBits.diametersMm,
+		settings.drillBits.maxDifferenceMm
+	);
 	const sideMirror = settings.drillSide === 'bottom' && settings.mirrorBottom;
 	const transform = createOutputTransform(settings, board.width, board.height, sideMirror);
+	const warnings: EngineWarning[] = [];
 
-	return diameters.map((diameter) => {
+	const files = groups.map((group) => {
+		const groupTargets = targets.filter((target) =>
+			group.holeDiametersMm.includes(target.diameterMm)
+		);
+		const counts = group.holeDiametersMm.map((size) => ({
+			size,
+			count: groupTargets.filter((target) => target.diameterMm === size).length
+		}));
+		const merged = counts.length > 1 || counts[0].size !== group.bitMm;
+		const coverage = counts.map(({ size, count }) => `${size} mm x${count}`).join(', ');
+
+		if (group.unmatched) {
+			warnings.push({
+				code: 'drill-no-bit',
+				message:
+					`${groupTargets.length} hole(s) of ${group.bitMm} mm have no drill bit within ` +
+					`${settings.drillBits.maxDifferenceMm} mm, so they get a ${group.bitMm} mm drill file of their own.`
+			});
+		}
+
 		const lines = [
 			...header(
 				boardName,
 				'Drill',
 				settings.drillSide === 'bottom' ? 'Bottom (board flipped)' : 'Top',
 				generatedAt,
-				[`( Drill Size: ${diameter} mm )`]
+				[
+					`( Drill Size: ${group.bitMm} mm )`,
+					...(merged ? [`( Designed Holes: ${coverage} )`] : [])
+				]
 			),
 			...initialize(settings, settings.drillingSafeZ, settings.drillingSpindleRPM)
 		];
 
-		const holes = targets
-			.filter((target) => target.diameterMm === diameter)
-			.map((target) => transform.point(target.position));
+		const holes = groupTargets.map((target) => transform.point(target.position));
 		emitDrillSequence(holes, settings, lines);
 
 		lines.push(...tearDown(settings, settings.drillingSafeZ));
 
+		const coverageLabel = merged
+			? ` — ${counts.map(({ size, count }) => `${size} mm ×${count}`).join(', ')}`
+			: '';
 		return {
-			fileName: `${boardName}-drill-${diameter}mm${extension}`,
-			label: `Drill ${diameter} mm holes (${holes.length})`,
+			fileName: `${boardName}-drill-${group.bitMm}mm${extension}`,
+			label: `Drill ${group.bitMm} mm holes (${holes.length})${coverageLabel}`,
 			kind: 'drill' as const,
-			drillDiameterMm: diameter,
+			drillDiameterMm: group.bitMm,
 			machining: { facing: settings.drillSide, sideMirror },
 			content: lines.join('\n') + '\n'
 		};
 	});
+
+	return { files, warnings };
 }
 
 /** Drill each hole nearest-first from the current position. */

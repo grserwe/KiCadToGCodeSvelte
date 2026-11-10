@@ -51,6 +51,7 @@ function sanitize(stored: Partial<GCodeSettings>, defaults: GCodeSettings): Part
 			const storedGroup =
 				storedValue !== null && typeof storedValue === 'object' ? storedValue : {};
 			clean[key] = { ...defaultValue, ...storedGroup };
+			if (key === 'drillBits') clean[key] = sanitizeDrillBits(clean[key], defaults.drillBits);
 			continue;
 		}
 		if (key === 'vBitAngleDeg') {
@@ -62,4 +63,22 @@ function sanitize(stored: Partial<GCodeSettings>, defaults: GCodeSettings): Part
 		}
 	}
 	return clean as Partial<GCodeSettings>;
+}
+
+/** The bit list must be an array of positive numbers; anything else falls back. */
+function sanitizeDrillBits(
+	value: unknown,
+	defaults: GCodeSettings['drillBits']
+): GCodeSettings['drillBits'] {
+	const group = value as Record<string, unknown>;
+	const diameters = Array.isArray(group.diametersMm)
+		? group.diametersMm.filter(
+				(d): d is number => typeof d === 'number' && Number.isFinite(d) && d > 0
+			)
+		: defaults.diametersMm;
+	const maxDifference =
+		typeof group.maxDifferenceMm === 'number' && Number.isFinite(group.maxDifferenceMm)
+			? group.maxDifferenceMm
+			: defaults.maxDifferenceMm;
+	return { diametersMm: diameters, maxDifferenceMm: maxDifference };
 }

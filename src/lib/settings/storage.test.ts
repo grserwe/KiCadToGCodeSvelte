@@ -67,6 +67,28 @@ describe('settings storage', () => {
 		expect(loaded.vBitAngleDeg).toBe(45);
 	});
 
+	it('round-trips the drill bit list and drops bad entries', () => {
+		const storage = new FakeStorage();
+		const settings = {
+			...defaultSettings(),
+			drillBits: { diametersMm: [0.9, 1.2], maxDifferenceMm: 0.1 }
+		};
+		saveSettings(settings, storage);
+		expect(loadSettings(storage).drillBits).toEqual(settings.drillBits);
+
+		storage.setItem(
+			'kicadtogcode.settings.v1',
+			JSON.stringify({ drillBits: { diametersMm: [0.9, 'x', -1], maxDifferenceMm: 'big' } })
+		);
+		expect(loadSettings(storage).drillBits).toEqual({
+			diametersMm: [0.9],
+			maxDifferenceMm: defaultSettings().drillBits.maxDifferenceMm
+		});
+
+		storage.setItem('kicadtogcode.settings.v1', JSON.stringify({ drillBits: { diametersMm: 5 } }));
+		expect(loadSettings(storage).drillBits).toEqual(defaultSettings().drillBits);
+	});
+
 	it('survives corrupted JSON', () => {
 		const storage = new FakeStorage();
 		storage.setItem('kicadtogcode.settings.v1', '{not json');

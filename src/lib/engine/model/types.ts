@@ -86,6 +86,7 @@ export interface EngineWarning {
 		| 'pad-skipped'
 		| 'track-skipped'
 		| 'drill-offset'
+		| 'drill-no-bit'
 		| 'width-capped'
 		| 'clearance'
 		| 'graphic-skipped'
