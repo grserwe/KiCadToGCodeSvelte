@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { GCodeSettings } from '$lib/engine/gcode/settings';
 	import { effectiveToolDiameterMm } from '$lib/engine/gcode/settings';
+	import { parseBitList } from '$lib/engine/gcode/drillBits';
 
 	let {
 		settings = $bindable(),
@@ -25,6 +26,7 @@
 	});
 
 	const vBitEnabled = $derived(settings.vBitAngleDeg !== null);
+	const bitListText = $derived(settings.drillBits.diametersMm.join(', '));
 </script>
 
 {#snippet numberField(
@@ -231,6 +233,38 @@
 			(v) => (settings.drillingSpindleRPM = Math.round(v)),
 			500
 		)}
+		<label class="flex items-center justify-between gap-2 py-1">
+			<span class="text-sm text-slate-600">Drill bits on hand</span>
+			<span class="flex items-center gap-1">
+				<input
+					type="text"
+					inputmode="decimal"
+					placeholder="all sizes"
+					value={bitListText}
+					onchange={(event) => {
+						const input = event.target as HTMLInputElement;
+						settings.drillBits.diametersMm = parseBitList(input.value);
+						input.value = settings.drillBits.diametersMm.join(', ');
+					}}
+					class="w-24 rounded-md border-slate-300 px-2 py-1 text-right text-sm"
+				/>
+				<span class="w-12 text-xs text-slate-400">mm</span>
+			</span>
+		</label>
+		{#if settings.drillBits.diametersMm.length > 0}
+			{@render numberField(
+				'Max size difference',
+				'mm',
+				() => settings.drillBits.maxDifferenceMm,
+				(v) => (settings.drillBits.maxDifferenceMm = v),
+				0.05
+			)}
+		{/if}
+		<p class="py-1 text-xs text-slate-400">
+			List your bits, e.g. <span class="font-mono">0.9, 1.2</span>, and each hole is drilled with
+			the nearest one, so close sizes share a file and a tool change. Holes further than the max
+			difference from every bit keep a file of their own. Leave it empty for one file per hole size.
+		</p>
 	{/snippet}
 	{@render group('drilling', 'Drilling', drillingBody)}
 
@@ -274,7 +308,8 @@
 			<span class="text-sm text-slate-600">File extension</span>
 			<select bind:value={settings.fileExtension} class="rounded-md border-slate-300 py-1 text-sm">
 				<option value=".txt">.txt</option>
-				<option value=".nc">.nc</option>
+				<option value=".tap">.tap (Mach3)</option>
+				<option value=".nc">.nc (Mach3)</option>
 				<option value=".gcode">.gcode</option>
 			</select>
 		</label>

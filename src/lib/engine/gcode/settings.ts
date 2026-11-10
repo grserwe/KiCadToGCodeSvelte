@@ -33,6 +33,16 @@ export interface GCodeSettings {
 	drillingPlungeSpeed: number;
 	drillingRetractSpeed: number;
 	drillingSpindleRPM: number;
+	/**
+	 * The drill bits on hand. Each hole is drilled with the nearest bit within
+	 * `maxDifferenceMm`, so close sizes share one file; holes no bit is close
+	 * enough to keep a file of their own. An empty list keeps one file per
+	 * designed size.
+	 */
+	drillBits: {
+		diametersMm: number[];
+		maxDifferenceMm: number;
+	};
 
 	xyRapidSpeed: number;
 	useMachineRapids: boolean;
@@ -108,6 +118,10 @@ export function defaultSettings(): GCodeSettings {
 		drillingPlungeSpeed: 10,
 		drillingRetractSpeed: 30,
 		drillingSpindleRPM: 10000,
+		drillBits: {
+			diametersMm: [],
+			maxDifferenceMm: 0.15
+		},
 
 		xyRapidSpeed: 60,
 		useMachineRapids: true,

@@ -129,6 +129,58 @@ describe('generateGCode', () => {
 		expect(top.content).toContain('Y0.1839');
 	});
 
+	describe('drill bit grouping', () => {
+		// Give the four 0.5 mm sample pads 0.8, 1.0, 1.3 and 3.2 mm drills.
+		const sizes = [0.8, 1.0, 1.3, 3.2];
+		let next = 0;
+		const variedBoard = {
+			...board,
+			pads: board.pads.map((pad) =>
+				pad.drill && pad.layers === 'through'
+					? { ...pad, drill: { ...pad.drill, diameter: sizes[next++ % sizes.length] } }
+					: pad
+			)
+		};
+		const drills = (settings: GCodeSettings) => {
+			const output = generateGCode(variedBoard, 'Sample', settings, GENERATED_AT);
+			return { output, files: output.files.filter((f) => f.kind === 'drill') };
+		};
+
+		it('keeps one file per designed size with no bits listed', () => {
+			expect(drills(mmSettings()).files.map((f) => f.fileName)).toEqual([
+				'Sample-drill-0.8mm.txt',
+				'Sample-drill-1mm.txt',
+				'Sample-drill-1.3mm.txt',
+				'Sample-drill-3.2mm.txt'
+			]);
+		});
+
+		it('drills close sizes with the nearest bit and warns about the rest', () => {
+			const { output, files } = drills(
+				mmSettings({ drillBits: { diametersMm: [0.9, 1.2], maxDifferenceMm: 0.15 } })
+			);
+			expect(files.map((f) => [f.fileName, f.drillDiameterMm])).toEqual([
+				['Sample-drill-0.9mm.txt', 0.9],
+				['Sample-drill-1.2mm.txt', 1.2],
+				['Sample-drill-3.2mm.txt', 3.2]
+			]);
+			expect(files[0].label).toBe('Drill 0.9 mm holes (2) — 0.8 mm ×1, 1 mm ×1');
+			expect(files[0].content).toContain('( Drill Size: 0.9 mm )');
+			expect(files[0].content).toContain('( Designed Holes: 0.8 mm x1, 1 mm x1 )');
+			expect(files[1].label).toBe('Drill 1.2 mm holes (1) — 1.3 mm ×1');
+			expect(files[2].label).toBe('Drill 3.2 mm holes (1)');
+			expect(files[2].content).not.toContain('Designed Holes');
+
+			const holeCount = (content: string) =>
+				content.split('\n').filter((l) => l.startsWith('G01 Z-')).length;
+			expect(files.map((f) => holeCount(f.content))).toEqual([2, 1, 1]);
+
+			const noBit = output.warnings.filter((w) => w.code === 'drill-no-bit');
+			expect(noBit).toHaveLength(1);
+			expect(noBit[0].message).toContain('3.2 mm');
+		});
+	});
+
 	it('can drill from the top unmirrored', () => {
 		const topDrill = generateGCode(board, 'Sample', mmSettings({ drillSide: 'top' }), GENERATED_AT);
 		const drill = topDrill.files.find((f) => f.kind === 'drill')!;
