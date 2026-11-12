@@ -26,7 +26,15 @@ function hole(x: number, y: number, diameter: number): Pad {
 }
 
 function boardWith(pads: Pad[]): BoardModel {
-	return { width: 30, height: 20, fileVersion: 20241229, tracks: [], pads, graphics: [] };
+	return {
+		width: 30,
+		height: 20,
+		fileVersion: 20241229,
+		tracks: [],
+		pads,
+		pours: [],
+		graphics: []
+	};
 }
 
 describe('selectLaserTargets', () => {

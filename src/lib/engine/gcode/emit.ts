@@ -1,6 +1,7 @@
 import type { BoardModel, EngineWarning, LayerId, Vec2 } from '../model/types';
 import { buildLayerToolpath } from '../toolpath/assemble';
 import { applyMinimumWidths } from '../toolpath/widening';
+import { selectLayerPour } from '../toolpath/pour';
 import { arcPoint, type PathSegment } from '../toolpath/segments';
 import { distance } from '../geometry/primitives';
 import * as g from './format';
@@ -170,9 +171,26 @@ function isolationFile(
 		layer === 'bottom' && settings.mirrorBottom
 			? ['( Mirrored for flip-over machining: flip the blank left-over-right )']
 			: [];
+
+	const pour = selectLayerPour(board, layer);
+	const pourNote: string[] = [];
+	if (pour) {
+		const netName = pour.netName || `net ${pour.net}`;
+		pourNote.push(`( Copper pour: ${netName} - left uncut, all uncut copper is ${netName} )`);
+		const passes = Math.max(1, settings.isolationPasses);
+		const cutWidth = toolDiameter * (1 + (passes - 1) * settings.isolationStepover);
+		if (cutWidth > pour.clearance + 1e-6) {
+			warnings.push({
+				code: 'pour-clearance',
+				message: `The ${layer} isolation cut (${cutWidth.toFixed(2)} mm wide) is wider than the ${netName} pour's ${pour.clearance.toFixed(2)} mm clearance, so it eats into the pour. Narrow necks of the pour between other copper may be cut through — check that the pour still joins up, or use a finer bit or fewer passes.`
+			});
+		}
+	}
+
 	const lines = [
 		...header(boardName, 'Isolation', layer === 'top' ? 'Top' : 'Bottom', generatedAt, [
 			...sideNote,
+			...pourNote,
 			`( Tool: ${toolDiameter.toFixed(3)} mm effective diameter, ${settings.isolationPasses} pass${settings.isolationPasses === 1 ? '' : 'es'} )`
 		]),
 		...initialize(settings, settings.isolationSafeZ, settings.isolationSpindleRPM)

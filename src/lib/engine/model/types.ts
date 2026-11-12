@@ -62,8 +62,14 @@ export interface Pad {
 	rotationDeg: number;
 	drill: Drill | null;
 	layers: PadLayers;
-	/** Ground-net pads get thermal-relief isolation instead of a full ring. */
+	/**
+	 * Net name looks like ground. On a layer WITHOUT a copper pour these pads
+	 * get thermal-relief isolation instead of a full ring (the legacy C#
+	 * behavior); on a layer with a pour, the pour's net decides instead.
+	 */
 	isGround: boolean;
+	/** Per-pad (or per-footprint) override of how this pad joins a pour. */
+	zoneConnection?: PourConnection;
 	/** False for np_thru_hole mounting holes: drill, but no copper to isolate. */
 	plated: boolean;
 	/** 'footprint' pads come from components; 'via' pads from via records. */
@@ -81,6 +87,7 @@ export interface EngineWarning {
 		| 'inner-layer-track'
 		| 'curved-track'
 		| 'copper-zone'
+		| 'pour-clearance'
 		| 'custom-pad-primitives'
 		| 'blind-buried-via'
 		| 'pad-skipped'
@@ -150,6 +157,33 @@ export type Graphic =
 			italic: boolean;
 	  };
 
+/**
+ * How a pad on a pour's net joins the pour (KiCad's zone `connect_pads` /
+ * pad `zone_connect`): thermal spokes, solid copper, not at all (isolated,
+ * joined only by its tracks), or thermal for through-hole pads and solid for
+ * surface pads.
+ */
+export type PourConnection = 'thermal' | 'solid' | 'none' | 'thermal-thru-hole';
+
+/**
+ * A copper zone (filled pour) on one copper layer. Isolation milling makes a
+ * pour for free: copper that is never cut stays on the board, so on a layer
+ * with a pour the pour's net is left uncut and joined to that copper.
+ */
+export interface Pour {
+	layer: LayerId;
+	/** Net id (same numbering as tracks and pads); never 0. */
+	net: number;
+	netName: string;
+	/** The zone's clearance to copper on other nets (mm). */
+	clearance: number;
+	connection: PourConnection;
+	/** The zone boundary as drawn. */
+	outline: Vec2[];
+	/** KiCad's last fill of the zone, one polygon per region; empty if never filled. */
+	fills: Vec2[][];
+}
+
 export interface BoardModel {
 	/** Board extents in mm (from Edge.Cuts when available). */
 	width: number;
@@ -158,6 +192,8 @@ export interface BoardModel {
 	fileVersion: number;
 	tracks: Track[];
 	pads: Pad[];
+	/** Copper zones on the top and bottom layers (keepouts and no-net zones excluded). */
+	pours: Pour[];
 	/** Silkscreen and board-edge drawings (not machined; used for the laser SVG). */
 	graphics: Graphic[];
 }

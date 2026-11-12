@@ -1,9 +1,13 @@
 import type { Vec2 } from '../model/types';
-import { angleDeg, distance, pointOnSegment } from './primitives';
+import { angleDeg, distance, pointOnSegment, positiveModulo } from './primitives';
 import type { OffsetLine, RouteGeom } from '../toolpath/routes';
 import { makeArc, makeFullCircle, type ArcSeg } from '../toolpath/segments';
 
 const BORDER_TOLERANCE = 0.00001;
+/** Half the angle of each thermal spoke (four 45° spokes, four 45° cut arcs). */
+const THERMAL_SPOKE_HALF_ANGLE = 22.5;
+/** Uncut stretches shorter than this (degrees) are not worth an arc. */
+const ANGLE_TOLERANCE = 0.01;
 
 /**
  * Geometry for a circular pad (or via) inflated by the isolation offset.
@@ -17,7 +21,8 @@ export class CircularPadGeometry {
 		readonly center: Vec2,
 		/** Effective isolation radius: copper radius + tool offset. */
 		readonly radius: number,
-		readonly isGround: boolean
+		/** Thermal relief: four spokes left uncut, joining the pad to the copper around it. */
+		readonly thermalRelief: boolean
 	) {}
 
 	containsPoint(point: Vec2): boolean {
@@ -68,15 +73,12 @@ export class CircularPadGeometry {
 	/**
 	 * The isolation arcs: a full circle when untouched, otherwise arcs covering
 	 * the boundary with gaps where each touching route's offset lines meet the
-	 * circle. Ground pads instead get four 45° thermal-relief arcs.
+	 * circle. Thermal-relief pads instead get four 45° arcs between spokes at
+	 * 0°/90°/180°/270°, with further gaps where routes enter.
 	 */
 	isolationArcs(): ArcSeg[] {
-		if (this.isGround) {
-			const arcs: ArcSeg[] = [];
-			for (let startAngle = 337.5; startAngle > 0; startAngle -= 90) {
-				arcs.push(makeArc(this.center, this.radius, startAngle, startAngle - 45));
-			}
-			return arcs;
+		if (this.thermalRelief) {
+			return this.thermalArcs();
 		}
 
 		interface BoundaryHit {
@@ -141,6 +143,64 @@ export class CircularPadGeometry {
 			arcs.push(makeArc(this.center, this.radius, from.angle % 360, to.angle % 360));
 		}
 		return arcs;
+	}
+
+	private thermalArcs(): ArcSeg[] {
+		/** Counterclockwise angular stretches (degrees) left uncut. */
+		const gaps: { start: number; end: number }[] = [0, 90, 180, 270].map((spoke) => ({
+			start: spoke - THERMAL_SPOKE_HALF_ANGLE,
+			end: spoke + THERMAL_SPOKE_HALF_ANGLE
+		}));
+
+		for (const route of this.touchingRoutes) {
+			const contacts = [this.boundaryContact(route.line1), this.boundaryContact(route.line2)]
+				.filter((contact): contact is Vec2 => contact !== null)
+				.map((contact) => angleDeg(this.center, contact));
+			if (contacts.length === 2) {
+				// The route covers the short way round between its two contacts.
+				const forward = positiveModulo(contacts[1] - contacts[0], 360);
+				gaps.push(
+					forward <= 180
+						? { start: contacts[0], end: contacts[0] + forward }
+						: { start: contacts[1], end: contacts[1] + 360 - forward }
+				);
+			} else if (contacts.length === 1) {
+				const halfAngle = (Math.asin(Math.min(1, route.width / 2 / this.radius)) * 180) / Math.PI;
+				gaps.push({ start: contacts[0] - halfAngle, end: contacts[0] + halfAngle });
+			}
+		}
+
+		// Unwrap into [0, 360), merge, and keep the complement.
+		const pieces: { start: number; end: number }[] = [];
+		for (const gap of gaps) {
+			const start = positiveModulo(gap.start, 360);
+			const end = start + Math.min(gap.end - gap.start, 360);
+			if (end <= 360) {
+				pieces.push({ start, end });
+			} else {
+				pieces.push({ start, end: 360 }, { start: 0, end: end - 360 });
+			}
+		}
+		pieces.sort((a, b) => a.start - b.start);
+
+		const keeps: { start: number; end: number }[] = [];
+		let position = 0;
+		for (const piece of pieces) {
+			if (piece.start - position > ANGLE_TOLERANCE)
+				keeps.push({ start: position, end: piece.start });
+			position = Math.max(position, piece.end);
+		}
+		if (360 - position > ANGLE_TOLERANCE) keeps.push({ start: position, end: 360 });
+		// A keep running through 0° comes out in two pieces; rejoin them.
+		if (keeps.length > 1 && keeps[0].start === 0 && keeps[keeps.length - 1].end === 360) {
+			const first = keeps.shift()!;
+			keeps[keeps.length - 1].end = 360 + first.end;
+		}
+
+		// Arcs run clockwise, from the high angle down to the low one.
+		return keeps
+			.reverse()
+			.map((keep) => makeArc(this.center, this.radius, keep.end % 360, keep.start));
 	}
 
 	/** A trimmed offset-line endpoint resting on this pad's boundary. */

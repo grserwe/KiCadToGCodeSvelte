@@ -11,19 +11,21 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 - Drill GCode grouped per drill size, or onto the drill bits you list (each hole uses the nearest bit within a set difference, so 0.8/0.9/1.0 mm share one file), plus registration holes for double-sided flip-over machining (bottom side mirrored about the vertical centerline)
 - Board cutout GCode: an end mill follows the Edge.Cuts outline (lines, arcs, circles, rectangles, polygons — chained into closed loops, with inner cutouts cut first) offset by the cutter radius, climb milling in depth passes, leaving holding tabs on the straight edges
 - All pad shapes: circle, oval, rect, roundrect (incl. chamfered), trapezoid, and custom polygon (e.g. hexagonal) pads; ground pads get thermal-relief gaps
+- Copper pours (KiCad zones) for free: on a layer with a pour, the pour's net is left uncut, so all the copper the bit never touches becomes that net. Its tracks get no isolation, its pads join the copper with thermal spokes, solidly, or not at all, following the zone's pad-connection setting and any per-pad override (vias always solid), and everything else is isolated as usual
 - SVG preview of both board sides: copper, engraving paths, drills, registration holes, zoom/pan
 - GCode viewer: replays each generated program the way a GRBL controller would, drawing cuts at the tool's real width, rapids, and plunges over the designed copper (mapped into machine coordinates), with a move-by-move step-through and checks for rapids with the tool down, inconsistent arcs, cutting with the spindle off, and missing feed rates or units
 - Configurable CNC settings (feeds, speeds, depths, origin, units), persisted in the browser
 - Clearance-aware minimum widths: thin traces and small pads are widened to your configured minimums (so copper doesn't peel during machining), capped automatically wherever copper on another net is too close — widening can never cause a short, and blocked spots are reported
 - Silkscreen SVG for laser marking: the top (and bottom) silkscreen drawings and text as a millimetre-sized SVG ready for LightBurn, with Print and Cut alignment targets on two drilled holes, plus the board outline and registration holes on their own colour/layer
 - All processing client-side in a Web Worker — your design never leaves your machine
-- Recoverable problems surface as warnings (oval slot holes, copper zones, curved traces, inner layers) instead of failures
+- Recoverable problems surface as warnings (oval slot holes, curved traces, inner layers, an isolation cut wider than a pour's clearance) instead of failures
 
 ## How the toolpaths are made
 
 1. **Parse** — a character-level S-expression tokenizer reads the `.kicad_pcb` into a board model in board-local, Y-up millimeter coordinates. Legacy (`module`) and modern (`footprint`) dialects both supported.
 2. **Offset** — every track becomes two parallel lines at `width/2 + tool radius`; where tracks meet, the lines are mitered or joined by angular adjacency. A track that runs through a pad (a component lead sitting mid-track) is first split at that pad so both pieces end inside it.
 3. **Pad isolation** — circular pads become arcs with gaps where tracks enter; other shapes build an outline (lines + corner arcs, inflated exactly by the tool radius) and gaps are cut out as perimeter intervals.
+   Thermal-relief pads keep four 45° spokes uncut as well.
 4. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
 
 ## Board cutout
@@ -42,9 +44,19 @@ The silkscreen output is an SVG, not GCode: LightBurn imports SVG and plans the 
 
 The bottom side is mirrored left-over-right (the face the laser sees), the same convention as the bottom isolation GCode. Silkscreen _text_ (reference designators, labels) is parsed but not drawn yet — KiCad draws text with its own stroke font, which the engine doesn't carry — and a warning lists how many items were left out.
 
+## Copper pours
+
+Isolation milling never removes the copper between cuts, so it is all still on the board, joined up. On a layer with a KiCad zone, that leftover copper is used as the pour:
+
+- tracks on the pour's net are not cut around (they are part of the pour);
+- pads on the pour's net get the zone's pad connection: thermal reliefs (four uncut spokes, plus gaps where their tracks enter), solid (no cut at all), or none (a ring with gaps only for their tracks). A pad's own `zone_connect` overrides the zone; vias are always solid, as in KiCad;
+- everything on other nets is isolated as before, including ground-named pads that are not on the pour's net.
+
+The milled pour covers more than KiCad's fill: it reaches every bit of copper left uncut, beyond the zone outline, and it keeps copper islands KiCad would have removed, which just float. As long as the isolation cut (tool diameter plus the extra passes) is no wider than the zone clearance, the cuts lie inside KiCad's clearance gaps, so every connection KiCad's fill makes is still there; a wider cut is reported. A layer has only one sheet of leftover copper, so it can carry only one pour net: when zones for several nets share a layer, the one with the largest area is used and the others are reported as ignored. Layers without a zone keep the old behaviour (ground-named pads get thermal reliefs; every track is isolated).
+
 ## Roadmap (not yet supported)
 
-- Copper zones / filled pours
+- Several pour nets on one layer (split planes)
 - Curved (arc) traces
 - Inner layers (4+ layer boards)
 

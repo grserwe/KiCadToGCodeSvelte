@@ -73,8 +73,8 @@ export function extractTracks(
 		});
 	}
 
-	// Curved (arc) tracks and copper zones are not supported in v1 — surface
-	// them as warnings so the user knows the output is incomplete.
+	// Curved (arc) tracks are not supported in v1 — surface them as a warning
+	// so the user knows the output is incomplete. (Copper zones: zones.ts.)
 	const copperArcs = findAllRecursive(root, 'arc').filter(
 		(arc) => copperLayer(findChild(arc, 'layer')?.attributes[0]) !== 'none'
 	);
@@ -82,20 +82,6 @@ export function extractTracks(
 		warnings.push({
 			code: 'curved-track',
 			message: `${copperArcs.length} curved track${copperArcs.length === 1 ? '' : 's'} (arc) ignored — curved traces are not supported yet.`
-		});
-	}
-
-	const copperZones = findAllRecursive(root, 'zone').filter((zone) => {
-		const layerNames = [
-			...(findChild(zone, 'layer')?.attributes ?? []),
-			...(findChild(zone, 'layers')?.attributes ?? [])
-		];
-		return layerNames.some((name) => name.toUpperCase().includes('.CU') || name.includes('*'));
-	});
-	if (copperZones.length > 0) {
-		warnings.push({
-			code: 'copper-zone',
-			message: `${copperZones.length} copper zone${copperZones.length === 1 ? '' : 's'} (filled pour) ignored — zones are not supported yet.`
 		});
 	}
 

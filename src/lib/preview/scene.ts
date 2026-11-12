@@ -7,6 +7,7 @@ import { graphicToSvgPath } from '../engine/silkscreen/svgPath';
 import { renderText, strokesToSvgPaths } from '../engine/silkscreen/text';
 import { selectLaserTargets } from '../engine/silkscreen/targets';
 import { buildProfileToolpath } from '../engine/profile/toolpath';
+import { selectLayerPour } from '../engine/toolpath/pour';
 
 export interface SceneTrack {
 	x1: number;
@@ -49,6 +50,11 @@ export interface BoardScene {
 	height: number;
 	tracks: SceneTrack[];
 	pads: ScenePad[];
+	/**
+	 * The layer's copper pour as SVG paths: KiCad's last fill, or the zone
+	 * outline when it was never filled. Empty when the layer has no pour.
+	 */
+	pour: string[];
 	drills: SceneDrill[];
 	registration: SceneDrill[];
 	/** Isolation toolpath (first pass) as SVG path strings. */
@@ -93,6 +99,10 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 			const edges = buildPadOutline(pad.shape, pad.rotationDeg, pad.position, 0);
 			return { path: outlineToSvgPath(edges), circle: null };
 		});
+
+	const pour: string[] = (selectLayerPour(board, layer)?.zones ?? []).flatMap((zone) =>
+		(zone.fills.length > 0 ? zone.fills : [zone.outline]).map(polygonToSvgPath)
+	);
 
 	const drills: SceneDrill[] = board.pads
 		.filter((pad) => pad.drill && pad.drill.diameter > 0 && pad.layers === 'through')
@@ -165,6 +175,7 @@ export function buildScene(board: BoardModel, layer: LayerId, settings: GCodeSet
 		height: board.height,
 		tracks,
 		pads,
+		pour,
 		drills,
 		registration,
 		toolpath,
@@ -192,6 +203,14 @@ export function outlineToSvgPath(edges: OutlineEdge[]): string {
 		}
 	}
 	return d + ' Z';
+}
+
+function polygonToSvgPath(points: { x: number; y: number }[]): string {
+	const round = (value: number) => Math.round(value * 1e4) / 1e4;
+	return (
+		points.map((p, index) => `${index === 0 ? 'M' : 'L'} ${round(p.x)} ${round(p.y)}`).join(' ') +
+		' Z'
+	);
 }
 
 /** Distinct drill diameters, for the legend's color keying. */
