@@ -70,6 +70,10 @@
 				stroke-width="0.08"
 			/>
 
+			{#each scene.pour as path, index (index)}
+				<path d={path} fill="#f59e0b" fill-opacity="0.35" stroke="none" />
+			{/each}
+
 			{#each scene.tracks as track, index (index)}
 				<line
 					x1={track.x1}
@@ -183,6 +187,11 @@
 		<span class="flex items-center gap-1">
 			<span class="inline-block h-3 w-3 rounded-sm bg-amber-600"></span> Copper
 		</span>
+		{#if scene.pour.length}
+			<span class="flex items-center gap-1">
+				<span class="inline-block h-3 w-3 rounded-sm bg-amber-500/35"></span> Copper pour
+			</span>
+		{/if}
 		<span class="flex items-center gap-1">
 			<span class="inline-block h-0.5 w-4 bg-green-800"></span> Engraving path
 		</span>

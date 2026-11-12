@@ -119,4 +119,25 @@ describe('OutlinePadGeometry — hexagonal pad', () => {
 		// Four gaps of perimeter/8 each → half the perimeter remains.
 		expect(total).toBeCloseTo(4.5, 4);
 	});
+
+	it('also leaves a gap where a track enters a thermal-relief pad', () => {
+		const pad = buildHexPad(true);
+		const route = createRoute({ x: 0, y: 0 }, { x: 10, y: 0 }, 1, 0.5, 'top');
+		for (const line of [route.line1, route.line2]) {
+			line.start = pad.segmentBoundaryIntersection(line)!;
+			line.startIntersectsPad = true;
+		}
+		pad.touchingRoutes.push(route);
+
+		const total = pad
+			.isolationSegments()
+			.reduce(
+				(sum, s) =>
+					s.kind === 'line' ? sum + Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y) : sum,
+				0
+			);
+		// The track's gap (perimeter 9 − 0.57735 round to 0.57735) overlaps the
+		// spoke gap ending at 9 and eats the first 0.57735 of the keep [0, 1.125].
+		expect(total).toBeCloseTo(4.5 - 0.57735, 3);
+	});
 });

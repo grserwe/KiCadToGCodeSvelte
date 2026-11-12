@@ -26,7 +26,8 @@ export class OutlinePadGeometry {
 	constructor(
 		readonly center: Vec2,
 		readonly edges: OutlineEdge[],
-		readonly isGround: boolean
+		/** Thermal relief: four spokes left uncut, joining the pad to the copper around it. */
+		readonly thermalRelief: boolean
 	) {
 		for (const edge of edges) {
 			edge.tessellate(this.containmentPolygon);
@@ -79,19 +80,19 @@ export class OutlinePadGeometry {
 		if (this.perimeter <= MINIMUM_SEGMENT_LENGTH) return segments;
 
 		const gaps: Interval[] = [];
-		if (this.isGround) {
-			// Four evenly spaced gaps keep ground pads connected to the
+		if (this.thermalRelief) {
+			// Four evenly spaced gaps keep the pad connected to the
 			// surrounding copper (thermal-relief style).
 			const eighth = this.perimeter / 8;
 			for (let gapIndex = 0; gapIndex < 4; gapIndex++) {
 				const gapStart = gapIndex * 2 * eighth + eighth;
 				gaps.push({ start: gapStart, end: gapStart + eighth });
 			}
-		} else {
-			for (const route of this.touchingRoutes) {
-				const gap = this.computeRouteGap(route);
-				if (gap) gaps.push(gap);
-			}
+		}
+		// Tracks entering the pad always get a gap, spokes or not.
+		for (const route of this.touchingRoutes) {
+			const gap = this.computeRouteGap(route);
+			if (gap) gaps.push(gap);
 		}
 
 		for (const keep of this.computeKeepIntervals(gaps)) {

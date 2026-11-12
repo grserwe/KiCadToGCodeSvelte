@@ -281,9 +281,9 @@
 							What isn't supported yet?
 						</summary>
 						<p class="mt-2 text-sm text-slate-600">
-							Copper zones (filled pours), curved traces, and inner layers of 4+ layer boards.
-							You'll get a clear warning whenever your design uses something the generator has to
-							skip or approximate.
+							Curved traces, inner layers of 4+ layer boards, and copper pours on more than one net
+							on the same layer. You'll get a clear warning whenever your design uses something the
+							generator has to skip or approximate.
 						</p>
 					</details>
 				</div>

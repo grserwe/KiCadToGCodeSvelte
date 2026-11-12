@@ -8,7 +8,7 @@ import { offsetLoopRight } from './offset';
 import { buildProfileToolpath } from './toolpath';
 
 function boardWith(graphics: Graphic[], width = 30, height = 20): BoardModel {
-	return { width, height, fileVersion: 20241229, tracks: [], pads: [], graphics };
+	return { width, height, fileVersion: 20241229, tracks: [], pads: [], pours: [], graphics };
 }
 
 const line = (x1: number, y1: number, x2: number, y2: number): Graphic => ({

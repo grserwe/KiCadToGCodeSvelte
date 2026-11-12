@@ -6,6 +6,7 @@ import { OutlinePadGeometry } from '../geometry/outlinePad';
 import { buildPadOutline } from '../geometry/outline';
 import { createRoute, type OffsetLine, type RouteGeom } from './routes';
 import type { PathSegment } from './segments';
+import { padPourJoint, selectLayerPour, type LayerPour } from './pour';
 
 const MINIMUM_SEGMENT_LENGTH = 0.0001;
 
@@ -33,6 +34,11 @@ type PadGeometry = CircularPadGeometry | OutlinePadGeometry;
  * Build the isolation toolpath for one copper layer: parallel offset lines
  * along each track (trimmed at junctions and pad boundaries) plus pad
  * isolation outlines with gaps where tracks enter.
+ *
+ * On a layer with a copper pour, the pour's net is not isolated: its tracks
+ * get no cuts (the uncut copper around them IS the pour) and its pads are
+ * joined to that copper solidly, by thermal spokes, or not at all, as the
+ * zone says. Everything on other nets is isolated as usual.
  */
 export function buildLayerToolpath(
 	board: BoardModel,
@@ -40,32 +46,47 @@ export function buildLayerToolpath(
 	options: ToolpathOptions
 ): LayerToolpath {
 	const warnings: EngineWarning[] = [];
+	const pour = selectLayerPour(board, layer);
+	if (pour) warnings.push(...ignoredPourWarnings(pour, layer));
 
-	// 1. Pads on this layer, inflated by the isolation offset.
-	const pads = board.pads
-		.filter((pad) => pad.plated && (pad.layers === layer || pad.layers === 'through'))
-		.map((pad) => createPadGeometry(pad, options, warnings))
-		.filter((geometry): geometry is PadGeometry => geometry !== null);
+	// 1. Pads on this layer, inflated by the isolation offset. Pads joined
+	//    solidly to the pour get no geometry at all: nothing is cut round them.
+	const padNets = new Map<PadGeometry, number>();
+	const pads: PadGeometry[] = [];
+	for (const pad of board.pads) {
+		if (!pad.plated || (pad.layers !== layer && pad.layers !== 'through')) continue;
+		const joint = padPourJoint(pad, pour);
+		if (joint === 'solid') continue;
+		const geometry = createPadGeometry(pad, joint === 'thermal', options, warnings);
+		if (!geometry) continue;
+		pads.push(geometry);
+		padNets.set(geometry, pad.net);
+	}
 
 	// 2. Tracks become routes with two plain parallel offset lines. Tracks are
 	//    first split wherever another track or a pad joins them mid-length
 	//    (T-junctions, component leads sitting on a track), so that every
 	//    meeting point is a junction of endpoints and the trimming below never
 	//    cuts straight through copper.
+	//    Pour-net tracks are built too — never cut, but they still mark where
+	//    their pads need gaps — and remembered so they are left out below.
 	const trackWidth = (track: Track) => Math.max(track.width, options.minimumTrackWidth);
+	const pourRoutes = new Set<RouteGeom>();
 	const routes: RouteGeom[] = splitTracksAtMidpointJoins(
 		board.tracks.filter((track) => track.layer === layer),
 		pads,
 		(track) => trackWidth(track) / 2 + options.isolationOffset
-	).map((track) =>
-		createRoute(
+	).map((track) => {
+		const route = createRoute(
 			track.start,
 			track.end,
 			trackWidth(track),
 			trackWidth(track) / 2 + options.isolationOffset,
 			layer
-		)
-	);
+		);
+		if (isPourNet(track.net, pour)) pourRoutes.add(route);
+		return route;
+	});
 
 	// 3. Junction trimming: miter or join offset lines where tracks meet.
 	for (const junction of collectJunctions(routes)) {
@@ -73,16 +94,20 @@ export function buildLayerToolpath(
 	}
 
 	// 4. Pads clip the offset lines and record which routes touch them
-	//    (which is where their isolation gaps go).
+	//    (which is where their isolation gaps go). A pour track only marks
+	//    gaps in its own net's pads: one passing close by another pad must
+	//    not open that pad's ring to the pour.
 	for (const pad of pads) {
 		for (const route of routes) {
+			if (pourRoutes.has(route) && padNets.get(pad) !== pour?.net) continue;
 			trimRouteAgainstPad(pad, route);
 		}
 	}
 
-	// 5. Collect all cut segments.
+	// 5. Collect all cut segments (pour tracks are never cut around).
 	const segments: PathSegment[] = [];
 	for (const route of routes) {
+		if (pourRoutes.has(route)) continue;
 		for (const line of [route.line1, route.line2]) {
 			if (!line.enclosedByPad && distance(line.start, line.end) > MINIMUM_SEGMENT_LENGTH) {
 				segments.push({ kind: 'line', start: line.start, end: line.end });
@@ -98,18 +123,30 @@ export function buildLayerToolpath(
 	return { segments, warnings };
 }
 
+function isPourNet(net: number, pour: LayerPour | null): boolean {
+	return pour !== null && net !== 0 && net === pour.net;
+}
+
+function ignoredPourWarnings(pour: LayerPour, layer: LayerId): EngineWarning[] {
+	if (pour.ignored.length === 0) return [];
+	const others = [...new Set(pour.ignored.map((zone) => zone.netName || `net ${zone.net}`))];
+	return [
+		{
+			code: 'copper-zone',
+			message: `The ${layer} layer has copper zones on more than one net. Only the ${pour.netName || `net ${pour.net}`} pour is milled (all uncut copper joins it); the ${others.join(', ')} zone${pour.ignored.length === 1 ? ' was' : 's were'} ignored, so pads that relied on ${others.length === 1 ? 'it' : 'them'} for a connection need tracks.`
+		}
+	];
+}
+
 function createPadGeometry(
 	pad: Pad,
+	thermal: boolean,
 	options: ToolpathOptions,
 	warnings: EngineWarning[]
 ): PadGeometry | null {
 	if (pad.shape.kind === 'circle') {
 		const diameter = Math.max(pad.shape.diameter, options.minimumPadDiameter);
-		return new CircularPadGeometry(
-			pad.position,
-			diameter / 2 + options.isolationOffset,
-			pad.isGround
-		);
+		return new CircularPadGeometry(pad.position, diameter / 2 + options.isolationOffset, thermal);
 	}
 
 	if (pad.shape.kind === 'polygon') {
@@ -125,7 +162,7 @@ function createPadGeometry(
 			pad.position,
 			options.isolationOffset
 		);
-		return new OutlinePadGeometry(pad.position, edges, pad.isGround);
+		return new OutlinePadGeometry(pad.position, edges, thermal);
 	}
 
 	// Grow undersized pads, preserving the already-large dimension (the C#
@@ -141,7 +178,7 @@ function createPadGeometry(
 
 	const edges = buildPadOutline(shape, pad.rotationDeg, pad.position, options.isolationOffset);
 	if (edges.length === 0) return null;
-	return new OutlinePadGeometry(pad.position, edges, pad.isGround);
+	return new OutlinePadGeometry(pad.position, edges, thermal);
 }
 
 /** A track endpoint resting on another track's centerline is a T-junction. */

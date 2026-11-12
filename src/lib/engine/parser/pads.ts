@@ -1,8 +1,16 @@
 import type { SExpr } from '../sexpr/types';
-import type { Drill, EngineWarning, PadLayers, PadShape, Vec2 } from '../model/types';
+import type {
+	Drill,
+	EngineWarning,
+	PadLayers,
+	PadShape,
+	PourConnection,
+	Vec2
+} from '../model/types';
 import type { Dialect } from './dialect';
 import type { NetIdReader } from './nets';
 import { findAllRecursive, findChild, numberAttr } from './sexprHelpers';
+import { zoneConnectOverride } from './zones';
 
 /** Default via drill when a legacy file omits it (KiCad's own default). */
 const DEFAULT_VIA_DRILL = 0.6;
@@ -16,6 +24,7 @@ export interface RawPad {
 	drill: Drill | null;
 	layers: PadLayers;
 	isGround: boolean;
+	zoneConnection?: PourConnection;
 	plated: boolean;
 	source: 'footprint' | 'via';
 	net: number;
@@ -57,7 +66,10 @@ export function extractPads(
 				netId,
 				warnings
 			);
-			if (pad) pads.push(pad);
+			if (!pad) continue;
+			const zoneConnection = zoneConnectOverride(padRecord) ?? zoneConnectOverride(footprint);
+			if (zoneConnection) pad.zoneConnection = zoneConnection;
+			pads.push(pad);
 		}
 	}
 

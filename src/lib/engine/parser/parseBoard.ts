@@ -1,11 +1,12 @@
 import { parseSExpression } from '../sexpr/tokenizer';
-import type { BoardModel, EngineWarning, Graphic, Pad, Track, Vec2 } from '../model/types';
+import type { BoardModel, EngineWarning, Graphic, Pad, Pour, Track, Vec2 } from '../model/types';
 import { dialectForVersion } from './dialect';
 import { BoardParseError } from './errors';
 import { computeExtents, type FileExtents } from './extents';
 import { createNetIdReader } from './nets';
 import { extractPads } from './pads';
 import { extractTracks } from './tracks';
+import { extractZones } from './zones';
 import { extractGraphics, type RawGraphic } from './graphics';
 import { arcThroughPoints } from '../geometry/arcs';
 import { childNumber } from './sexprHelpers';
@@ -51,6 +52,7 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 
 	const rawTracks = extractTracks(root, netId, warnings);
 	const rawPads = extractPads(root, dialect, netId, warnings);
+	const rawPours = extractZones(root, netId, warnings);
 	const rawGraphics = extractGraphics(root, dialect, warnings);
 	const extents = computeExtents(root, rawPads, rawTracks);
 
@@ -81,6 +83,12 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 				: pad.shape
 	}));
 
+	const pours: Pour[] = rawPours.map((pour) => ({
+		...pour,
+		outline: pour.outline.map(toLocal),
+		fills: pour.fills.map((fill) => fill.map(toLocal))
+	}));
+
 	const graphics: Graphic[] = [];
 	for (const raw of rawGraphics) {
 		const graphic = localizeGraphic(raw, toLocal);
@@ -94,6 +102,7 @@ export function parseBoard(fileContents: string): ParseBoardResult {
 			fileVersion,
 			tracks,
 			pads,
+			pours,
 			graphics
 		},
 		warnings
