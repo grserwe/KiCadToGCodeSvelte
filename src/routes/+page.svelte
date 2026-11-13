@@ -23,6 +23,8 @@
 	import { interpretGCode } from '$lib/preview/gcode';
 	import { buildScene } from '$lib/preview/scene';
 	import { loadSettings, saveSettings, clearSettings } from '$lib/settings/storage';
+	import { loadToolLibrary, saveToolLibrary } from '$lib/settings/toolLibrary';
+	import { defaultIsolationTools, type IsolationTool } from '$lib/engine/gcode/isolationTools';
 	import { convertBoard, type ConversionResult } from '$lib/worker/engineClient';
 
 	let boardSource = $state<{ name: string; contents: string } | null>(null);
@@ -33,9 +35,27 @@
 	let viewMode = $state<'designed' | 'machined'>('designed');
 	let previewMode = $state<'design' | 'gcode'>('design');
 	let viewedFileName = $state<string | null>(null);
-	let settings = $state(browser ? loadSettings() : defaultSettings());
+	const initialSettings = browser ? loadSettings() : defaultSettings();
+	let settings = $state(initialSettings);
+	// A first visit starts with the default tools on the saved units and spindle speed.
+	let tools = $state<IsolationTool[]>(
+		browser
+			? (loadToolLibrary() ??
+					defaultIsolationTools(initialSettings.outputUnits, initialSettings.isolationSpindleRPM))
+			: []
+	);
 	let zipCandidates = $state<PcbCandidate[] | null>(null);
 	let feedbackOpen = $state(false);
+
+	let toolsInitialized = false;
+	$effect(() => {
+		const snapshot = $state.snapshot(tools);
+		if (!toolsInitialized) {
+			toolsInitialized = true;
+			return;
+		}
+		saveToolLibrary(snapshot);
+	});
 
 	// Persist settings whenever they change, and regenerate the current board.
 	// Only `settings` may be tracked here: `convert()` reassigns `boardSource`, so
@@ -419,7 +439,7 @@
 
 					<aside class="space-y-6">
 						<DownloadPanel files={result.files} boardName={boardSource.name} onview={viewFile} />
-						<SettingsPanel bind:settings onreset={resetSettings} />
+						<SettingsPanel bind:settings bind:tools onreset={resetSettings} />
 						<section
 							class="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm"
 						>

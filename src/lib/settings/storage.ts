@@ -58,6 +58,10 @@ function sanitize(stored: Partial<GCodeSettings>, defaults: GCodeSettings): Part
 			if (storedValue === null || typeof storedValue === 'number') clean[key] = storedValue;
 			continue;
 		}
+		if (key === 'isolationToolId') {
+			if (storedValue === null || typeof storedValue === 'string') clean[key] = storedValue;
+			continue;
+		}
 		if (typeof storedValue === typeof defaultValue) {
 			clean[key] = storedValue;
 		}
