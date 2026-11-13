@@ -2,6 +2,7 @@ import type { BoardModel, EngineWarning, LayerId, Vec2 } from '../model/types';
 import { buildLayerToolpath } from '../toolpath/assemble';
 import { applyMinimumWidths } from '../toolpath/widening';
 import { selectLayerPour } from '../toolpath/pour';
+import { buildCopperClearance, clipToClearance } from '../toolpath/clearance';
 import { arcPoint, type PathSegment } from '../toolpath/segments';
 import { distance } from '../geometry/primitives';
 import * as g from './format';
@@ -198,6 +199,9 @@ function isolationFile(
 
 	let position: Vec2 = { x: 0, y: 0 };
 	let firstCut = true;
+	// Outer passes only widen the gap: they stop wherever they would cut copper.
+	const clearance =
+		settings.isolationPasses > 1 ? buildCopperClearance(board, layer, toolDiameter / 2) : null;
 
 	for (let pass = 0; pass < Math.max(1, settings.isolationPasses); pass++) {
 		const isolationOffset = toolDiameter / 2 + pass * settings.isolationStepover * toolDiameter;
@@ -211,11 +215,21 @@ function isolationFile(
 		if (pass === 0) {
 			warnings.push(...toolpath.warnings);
 		}
-		if (settings.isolationPasses > 1) {
+		let segments = toolpath.segments;
+		if (pass > 0 && clearance) {
+			const clipped = clipToClearance(segments, clearance);
+			segments = clipped.segments;
+			const leftOut = clipped.lengthBefore - clipped.lengthAfter;
+			const note =
+				leftOut > 0.05
+					? `, ${leftOut.toFixed(1)} of ${clipped.lengthBefore.toFixed(1)} mm left out where copper is too close`
+					: '';
+			lines.push(`( Pass ${pass + 1}: offset ${isolationOffset.toFixed(3)} mm${note} )`);
+		} else if (settings.isolationPasses > 1) {
 			lines.push(`( Pass ${pass + 1}: offset ${isolationOffset.toFixed(3)} mm )`);
 		}
 		position = walkSegments(
-			toOutputSegments(toolpath.segments, transform),
+			toOutputSegments(segments, transform),
 			position,
 			firstCut,
 			settings,

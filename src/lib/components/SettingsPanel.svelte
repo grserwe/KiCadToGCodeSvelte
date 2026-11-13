@@ -2,12 +2,16 @@
 	import type { GCodeSettings } from '$lib/engine/gcode/settings';
 	import { effectiveToolDiameterMm } from '$lib/engine/gcode/settings';
 	import { parseBitList } from '$lib/engine/gcode/drillBits';
+	import type { IsolationTool } from '$lib/engine/gcode/isolationTools';
+	import ToolLibrary from './ToolLibrary.svelte';
 
 	let {
 		settings = $bindable(),
+		tools = $bindable(),
 		onreset
 	}: {
 		settings: GCodeSettings;
+		tools: IsolationTool[];
 		onreset: () => void;
 	} = $props();
 
@@ -92,6 +96,7 @@
 	</div>
 
 	{#snippet toolBody()}
+		<ToolLibrary bind:settings bind:tools />
 		{@render numberField(
 			'Tool tip diameter',
 			'mm',
@@ -139,6 +144,9 @@
 				0.1,
 				0.1
 			)}
+			<p class="py-1 text-xs text-slate-400">
+				Extra passes stop short of any track or pad they would cut into.
+			</p>
 		{/if}
 		{@render numberField(
 			'Minimum trace width',

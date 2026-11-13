@@ -13,6 +13,11 @@ export interface GCodeSettings {
 	flipX: boolean;
 	flipY: boolean;
 
+	/**
+	 * The tool-library bit last applied to the isolation settings, or null when
+	 * they were entered by hand. The settings themselves are what's machined.
+	 */
+	isolationToolId: string | null;
 	/** Engraving tool tip diameter in mm (0 = cut on the copper edge). */
 	toolDiameterMm: number;
 	/** V-bit tip angle in degrees; null for straight (end-mill style) bits. */
@@ -102,6 +107,7 @@ export function defaultSettings(): GCodeSettings {
 		flipX: false,
 		flipY: false,
 
+		isolationToolId: null,
 		toolDiameterMm: 0.1,
 		vBitAngleDeg: null,
 		isolationPasses: 1,
@@ -162,8 +168,9 @@ export function defaultSettings(): GCodeSettings {
 
 /**
  * The tool's effective cutting diameter at the configured isolation depth.
- * A V-bit cuts a cone: width = 2 · depth · tan(angle / 2), never less than
- * the tip diameter.
+ * A V-bit's tip is a flat of the tip diameter with the cone widening above
+ * it, so width = tip + 2 · depth · tan(angle / 2). A tip of 0 is a pointed
+ * cone.
  */
 export function effectiveToolDiameterMm(settings: GCodeSettings): number {
 	const depthMm =
@@ -172,5 +179,5 @@ export function effectiveToolDiameterMm(settings: GCodeSettings): number {
 		return settings.toolDiameterMm;
 	}
 	const coneWidth = 2 * depthMm * Math.tan(((settings.vBitAngleDeg / 2) * Math.PI) / 180);
-	return Math.max(settings.toolDiameterMm, coneWidth);
+	return settings.toolDiameterMm + coneWidth;
 }

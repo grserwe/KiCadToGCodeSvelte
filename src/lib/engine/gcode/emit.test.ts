@@ -113,7 +113,10 @@ describe('generateGCode', () => {
 		);
 		const top = multi.files.find((f) => f.kind === 'isolation-top')!;
 		expect(top.content).toContain('( Pass 1: offset 0.100 mm )');
-		expect(top.content).toContain('( Pass 2: offset 0.200 mm )');
+		// The sample's pads sit 0.15 mm apart, so pass 2 stops short of them.
+		expect(top.content).toContain(
+			'( Pass 2: offset 0.200 mm, 3.5 of 42.9 mm left out where copper is too close )'
+		);
 	});
 
 	it('respects inch output units', () => {
@@ -189,7 +192,24 @@ describe('generateGCode', () => {
 
 	it('honors V-bit effective width', () => {
 		const settings = mmSettings({ vBitAngleDeg: 60, isolationDepth: 0.2, toolDiameterMm: 0.1 });
-		// width = 2 · 0.2 · tan(30°) ≈ 0.2309.
+		// width = tip + 2 · depth · tan(angle / 2) = 0.1 + 2 · 0.2 · tan(30°) ≈ 0.3309.
+		expect(effectiveToolDiameterMm(settings)).toBeCloseTo(0.33094, 4);
+	});
+
+	it('adds the cone to a flat V-bit tip, converting an inch depth', () => {
+		// 30° bit with a 0.2 mm tip at 0.004″ (0.1016 mm):
+		// 0.2 + 2 · 0.1016 · tan(15°) ≈ 0.25445.
+		const settings = {
+			...defaultSettings(),
+			vBitAngleDeg: 30,
+			toolDiameterMm: 0.2,
+			isolationDepth: 0.004
+		};
+		expect(effectiveToolDiameterMm(settings)).toBeCloseTo(0.25445, 4);
+	});
+
+	it('treats a zero-diameter V-bit tip as a pointed cone', () => {
+		const settings = mmSettings({ vBitAngleDeg: 60, isolationDepth: 0.2, toolDiameterMm: 0 });
 		expect(effectiveToolDiameterMm(settings)).toBeCloseTo(0.23094, 4);
 	});
 });
