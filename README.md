@@ -7,7 +7,7 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 ## Features
 
 - Accepts a `.kicad_pcb` file (KiCad 4 through 10) or a zipped KiCad project
-- Isolation-routing GCode for top and bottom copper, tool-diameter/V-bit aware, multi-pass with stepover
+- Isolation-routing GCode for top and bottom copper, tool-diameter/V-bit aware, multi-pass with stepover. Passes after the first only widen the gap, so they stop wherever they would cut into a track or pad (on any net); each pass's GCode comment says how much was left out
 - Drill GCode grouped per drill size, or onto the drill bits you list (each hole uses the nearest bit within a set difference, so 0.8/0.9/1.0 mm share one file), plus registration holes for double-sided flip-over machining (bottom side mirrored about the vertical centerline)
 - Board cutout GCode: an end mill follows the Edge.Cuts outline (lines, arcs, circles, rectangles, polygons — chained into closed loops, with inner cutouts cut first) offset by the cutter radius, climb milling in depth passes, leaving holding tabs on the straight edges
 - All pad shapes: circle, oval, rect, roundrect (incl. chamfered), trapezoid, and custom polygon (e.g. hexagonal) pads; ground pads get thermal-relief gaps
@@ -26,7 +26,8 @@ Convert KiCad PCB designs into CNC GCode for isolation-engraving traces on coppe
 2. **Offset** — every track becomes two parallel lines at `width/2 + tool radius`; where tracks meet, the lines are mitered or joined by angular adjacency. A track that runs through a pad (a component lead sitting mid-track) is first split at that pad so both pieces end inside it.
 3. **Pad isolation** — circular pads become arcs with gaps where tracks enter; other shapes build an outline (lines + corner arcs, inflated exactly by the tool radius) and gaps are cut out as perimeter intervals.
    Thermal-relief pads keep four 45° spokes uncut as well.
-4. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
+4. **Extra passes** — passes 2 and up are the same toolpath at a larger offset, built feature by feature, so where two features are closer than the full cut an outer pass of one would run into the other. Each such path is sampled every 0.02 mm against every track and pad on the layer (inflated by the tool radius), the boundaries are refined by bisection, and only the clear pieces are kept (pieces under 0.1 mm are dropped). The pour's undesigned copper is not protected: widening the gap into it is what the extra passes are for.
+5. **Emit** — a greedy nearest-neighbour walk orders the segments, then the transform pipeline applies side mirroring, user flips, XY-zero placement, and unit conversion before writing GRBL-safe GCode (G0/G1/G2/G3, M3/M5).
 
 ## Board cutout
 

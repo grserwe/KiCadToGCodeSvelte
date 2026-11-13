@@ -139,6 +139,9 @@
 				0.1,
 				0.1
 			)}
+			<p class="py-1 text-xs text-slate-400">
+				Extra passes stop short of any track or pad they would cut into.
+			</p>
 		{/if}
 		{@render numberField(
 			'Minimum trace width',

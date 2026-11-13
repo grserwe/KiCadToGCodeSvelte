@@ -113,7 +113,10 @@ describe('generateGCode', () => {
 		);
 		const top = multi.files.find((f) => f.kind === 'isolation-top')!;
 		expect(top.content).toContain('( Pass 1: offset 0.100 mm )');
-		expect(top.content).toContain('( Pass 2: offset 0.200 mm )');
+		// The sample's pads sit 0.15 mm apart, so pass 2 stops short of them.
+		expect(top.content).toContain(
+			'( Pass 2: offset 0.200 mm, 3.5 of 42.9 mm left out where copper is too close )'
+		);
 	});
 
 	it('respects inch output units', () => {
