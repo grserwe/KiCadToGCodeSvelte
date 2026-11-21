@@ -51,6 +51,34 @@ describe('CircularPadGeometry', () => {
 		expect(arcs[0].endAngle).toBeCloseTo(entryHalfAngle, 3);
 	});
 
+	it('keeps the outside of a wide-track corner whose inner lines miss the pad', () => {
+		// ShowerLight: 1.27 mm tracks turn 90° on a 0.85 mm-radius pad. Only
+		// each track's outer line reaches the circle; the inner lines meet
+		// each other outside it, so each route has a single contact.
+		const pad = new CircularPadGeometry({ x: 0, y: 0 }, 0.85, false);
+		const up = createRoute({ x: 0, y: 5 }, { x: 0, y: 0 }, 1.27, 0.735, 'bottom');
+		const left = createRoute({ x: 0, y: 0 }, { x: -5, y: 0 }, 1.27, 0.735, 'bottom');
+		const reach = Math.sqrt(0.85 ** 2 - 0.735 ** 2);
+		// Outer lines clipped at the pad: up's right line, left's lower line.
+		up.line1.end = { x: 0.735, y: reach };
+		up.line1.endIntersectsPad = true;
+		left.line1.start = { x: -reach, y: -0.735 };
+		left.line1.startIntersectsPad = true;
+		// Inner lines trimmed to their shared corner, outside the circle.
+		up.line2.end = { x: -0.735, y: 0.735 };
+		left.line2.start = { x: -0.735, y: 0.735 };
+		pad.touchingRoutes.push(up, left);
+
+		const arcs = pad.isolationArcs();
+		expect(arcs).toHaveLength(1);
+		// Clockwise from the up track's outer contact, round the bottom-right,
+		// to the left track's — not through the inside corner at 135°.
+		const contactAngle = (Math.atan2(reach, 0.735) * 180) / Math.PI;
+		expect(arcs[0].startAngle).toBeCloseTo(contactAngle, 3);
+		expect(arcs[0].endAngle).toBeCloseTo(270 - contactAngle, 3);
+		expect(arcSweep(arcs[0])).toBeCloseTo(90 + 2 * contactAngle, 3);
+	});
+
 	it('drops offset lines fully enclosed by the pad', () => {
 		const pad = new CircularPadGeometry({ x: 0, y: 0 }, 5, false);
 		const route = createRoute({ x: -1, y: 0 }, { x: 1, y: 0 }, 1, 0.5, 'top');
