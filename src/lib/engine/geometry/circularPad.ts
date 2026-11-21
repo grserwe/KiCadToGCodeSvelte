@@ -1,5 +1,12 @@
 import type { Vec2 } from '../model/types';
-import { angleDeg, distance, pointOnSegment, positiveModulo } from './primitives';
+import {
+	angleDeg,
+	degToRad,
+	distance,
+	pointOnSegment,
+	pointToSegmentDistance,
+	positiveModulo
+} from './primitives';
 import type { OffsetLine, RouteGeom } from '../toolpath/routes';
 import { makeArc, makeFullCircle, type ArcSeg } from '../toolpath/segments';
 
@@ -81,68 +88,72 @@ export class CircularPadGeometry {
 			return this.thermalArcs();
 		}
 
-		interface BoundaryHit {
-			isStart: boolean;
-			angle: number;
-		}
-		const hits: BoundaryHit[] = [];
-
+		// Every place a route's isolation line meets the circle splits it.
+		const angles: number[] = [];
 		for (const route of this.touchingRoutes) {
-			const contact1 = this.boundaryContact(route.line1);
-			const contact2 = this.boundaryContact(route.line2);
-
-			if (contact1 && contact2) {
-				let angle1 = angleDeg(this.center, contact1);
-				let angle2 = angleDeg(this.center, contact2);
-
-				if (angle1 > angle2) {
-					[angle1, angle2] = [angle2, angle1];
-				}
-				// Keep the pair ordered so the route's gap is the SHORT way
-				// around; when the gap straddles 0° the roles swap.
-				if (Math.abs(360 - angle2 + angle1) < angle2 - angle1) {
-					[angle1, angle2] = [angle2, angle1];
-				}
-
-				hits.push({ isStart: true, angle: angle1 });
-				hits.push({ isStart: false, angle: angle2 });
-			} else if (contact1) {
-				hits.push({ isStart: false, angle: angleDeg(this.center, contact1) });
-			} else if (contact2) {
-				hits.push({ isStart: false, angle: angleDeg(this.center, contact2) });
+			for (const line of [route.line1, route.line2]) {
+				const contact = this.boundaryContact(line);
+				if (contact) angles.push(angleDeg(this.center, contact));
 			}
 		}
-
-		if (hits.length === 0) {
+		angles.sort((a, b) => a - b);
+		const splits = angles.filter(
+			(angle, index) => index === 0 || angle - angles[index - 1] > ANGLE_TOLERANCE
+		);
+		if (splits.length > 1 && splits[0] + 360 - splits[splits.length - 1] <= ANGLE_TOLERANCE) {
+			splits.pop();
+		}
+		if (splits.length < 2) {
 			return [makeFullCircle(this.center, this.radius)];
 		}
-		if (hits.length % 2 !== 0) {
-			hits.pop();
-			if (hits.length === 0) {
-				return [makeFullCircle(this.center, this.radius)];
-			}
+
+		// Keep each stretch between splits that no touching route covers.
+		// Deciding by what covers the stretch (rather than pairing contacts
+		// up) stays right when a route meets the circle with only one of its
+		// lines — e.g. a wide track turning a corner on the pad, whose inner
+		// lines meet each other outside the circle.
+		const keeps: { start: number; end: number }[] = [];
+		for (let index = 0; index < splits.length; index++) {
+			const start = splits[index];
+			const end = index + 1 < splits.length ? splits[index + 1] : splits[0] + 360;
+			if (this.coveredByRoute((start + end) / 2)) continue;
+			const previous = keeps[keeps.length - 1];
+			if (previous && previous.end === start) previous.end = end;
+			else keeps.push({ start, end });
+		}
+		// A keep running through the first split comes out in two pieces.
+		if (keeps.length > 1 && keeps[keeps.length - 1].end === keeps[0].start + 360) {
+			keeps[0].start = keeps.pop()!.start - 360;
+		}
+		if (keeps.length === 1 && keeps[0].end - keeps[0].start >= 360) {
+			return [makeFullCircle(this.center, this.radius)];
 		}
 
-		const ordered = [...hits].sort((a, b) => b.angle - a.angle);
+		// Arcs run clockwise, from the high angle down to the low one, and
+		// are emitted in order of decreasing start angle.
+		return keeps
+			.map((keep) =>
+				makeArc(
+					this.center,
+					this.radius,
+					positiveModulo(keep.end, 360),
+					positiveModulo(keep.start, 360)
+				)
+			)
+			.sort((a, b) => b.startAngle - a.startAngle);
+	}
 
-		// Rotate the list when it starts mid-gap so pairs line up as
-		// (keep-arc start, keep-arc end).
-		if (
-			(!ordered[0].isStart && ordered[1].isStart) ||
-			(!ordered[0].isStart &&
-				!ordered[1].isStart &&
-				Math.abs(ordered[0].angle - ordered[1].angle) < 180)
-		) {
-			ordered.push(ordered.shift()!);
-		}
-
-		const arcs: ArcSeg[] = [];
-		for (let index = 0; index < ordered.length; index += 2) {
-			const from = ordered[index];
-			const to = ordered[index + 1] ?? ordered[0];
-			arcs.push(makeArc(this.center, this.radius, from.angle % 360, to.angle % 360));
-		}
-		return arcs;
+	/** Whether the circle point at `angle` lies inside a touching route's isolated copper. */
+	private coveredByRoute(angle: number): boolean {
+		const point = {
+			x: this.center.x + this.radius * Math.cos(degToRad(angle)),
+			y: this.center.y + this.radius * Math.sin(degToRad(angle))
+		};
+		return this.touchingRoutes.some(
+			(route) =>
+				pointToSegmentDistance(point, { start: route.start, end: route.end }) <
+				route.offsetDistance - BORDER_TOLERANCE
+		);
 	}
 
 	private thermalArcs(): ArcSeg[] {
